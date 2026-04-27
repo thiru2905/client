@@ -21,6 +21,8 @@ type NavItem = {
   group: "Workspace" | "People" | "Money" | "Ops" | "Admin";
 };
 
+const NEW_BADGE_ROUTES = new Set<string>(["/bonus", "/time-dashboard", "/alyson-notetaker"]);
+
 const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, group: "Workspace" },
   { to: "/team", label: "Team", icon: Users, group: "People", roles: ["super_admin", "ceo", "hr", "manager"] },
@@ -131,7 +133,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         }
                       >
                         <Icon className="h-4 w-4 shrink-0" />
-                        {showLabel && <span className="truncate">{item.label}</span>}
+                        {showLabel && (
+                          <span className="truncate flex items-center gap-2 min-w-0">
+                            <span className="truncate">{item.label}</span>
+                            {NEW_BADGE_ROUTES.has(item.to) && (
+                              <span className="shrink-0 rounded-full border border-blue-600/30 bg-blue-600/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-400">
+                                New
+                              </span>
+                            )}
+                          </span>
+                        )}
                       </Link>
                     );
                   })}

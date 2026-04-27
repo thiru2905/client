@@ -178,6 +178,7 @@ function SessionPanel({ botId }: { botId: string | null }) {
   const [notes, setNotes] = useState<string>("");
   const [notesModel, setNotesModel] = useState<string>("");
   const [copied, setCopied] = useState(false);
+  const [transcriptCopied, setTranscriptCopied] = useState(false);
 
   const mergedLines = useMemo(() => {
     const staticLines = q.data?.lines ?? [];
@@ -246,6 +247,15 @@ function SessionPanel({ botId }: { botId: string | null }) {
 
   const session = q.data?.session;
   const plainNotes = notes ? notesToPlainText(notes) : "";
+  const plainTranscript = mergedLines
+    .map((L) => {
+      const who = (L.participant?.name || "Speaker").trim();
+      const text = String(L.text || "").trim();
+      if (!text) return "";
+      return `${who}: ${text}`;
+    })
+    .filter(Boolean)
+    .join("\n");
 
   return (
     <div className="surface-card p-4">
@@ -267,7 +277,25 @@ function SessionPanel({ botId }: { botId: string | null }) {
         <div className="border border-border rounded-lg overflow-hidden">
           <div className="px-3 py-2 border-b border-border bg-muted/30 text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-medium flex items-center justify-between">
             <span>Live transcript</span>
-            <span className="normal-case tracking-normal text-[11px]">{mergedLines.length} lines</span>
+            <span className="normal-case tracking-normal text-[11px] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!plainTranscript.trim()) return;
+                  await navigator.clipboard.writeText(plainTranscript);
+                  setTranscriptCopied(true);
+                  toast.success("Transcript copied to clipboard");
+                  window.setTimeout(() => setTranscriptCopied(false), 1200);
+                }}
+                disabled={!plainTranscript.trim()}
+                className="h-6 w-6 grid place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted/40 disabled:opacity-50"
+                title={transcriptCopied ? "Copied" : "Copy transcript"}
+                aria-label="Copy transcript"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <span>{mergedLines.length} lines</span>
+            </span>
           </div>
           <div className="max-h-[520px] overflow-y-auto">
             {mergedLines.length === 0 ? (
