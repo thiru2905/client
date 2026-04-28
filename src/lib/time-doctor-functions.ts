@@ -57,6 +57,7 @@ export type TimeDoctorEmployeeRow = {
   email: string;
   title: string;
   dailySeconds: number;
+  monthlySeconds: number;
 };
 
 const UserDetailInput = z.object({
@@ -363,13 +364,15 @@ export const fetchTimeDoctorEmployeesTable = createServerFn({ method: "GET" })
     const day = data.day ?? format(new Date(), "yyyy-MM-dd");
     const company = await getCompany({ auth: "access_only" });
 
-    const [usersR, dailyR] = await Promise.allSettled([
+    const [usersR, dailyR, monthlyR] = await Promise.allSettled([
       listUsers(company.id, { auth: "access_only" }),
       listDailyWorkSecondsByUser(company.id, day, { auth: "access_only" }),
+      listMonthToDateWorkSecondsByUser(company.id, day, { auth: "access_only" }),
     ]);
 
     const users = usersR.status === "fulfilled" ? usersR.value : [];
     const daily = dailyR.status === "fulfilled" ? dailyR.value : new Map<string, number>();
+    const monthly = monthlyR.status === "fulfilled" ? monthlyR.value : new Map<string, number>();
 
     const rows: TimeDoctorEmployeeRow[] = users
       .map((u) => ({
@@ -378,6 +381,7 @@ export const fetchTimeDoctorEmployeesTable = createServerFn({ method: "GET" })
         email: u.email,
         title: u.title ?? "",
         dailySeconds: daily.get(u.id) ?? 0,
+        monthlySeconds: monthly.get(u.id) ?? 0,
       }))
       .sort((a, b) => (b.dailySeconds ?? 0) - (a.dailySeconds ?? 0));
 
@@ -387,6 +391,7 @@ export const fetchTimeDoctorEmployeesTable = createServerFn({ method: "GET" })
       warnings: [
         ...(usersR.status === "rejected" ? [`users: ${String(usersR.reason)}`] : []),
         ...(dailyR.status === "rejected" ? [`daily-worklogs: ${String(dailyR.reason)}`] : []),
+        ...(monthlyR.status === "rejected" ? [`monthly-worklogs: ${String(monthlyR.reason)}`] : []),
       ].slice(0, 5),
       employees: rows,
     };
@@ -1134,6 +1139,29 @@ async function listDailyWorkSecondsByUser(
 
     if (items.length < limit) break;
     offset += limit;
+  }
+
+  return out;
+}
+
+async function listMonthToDateWorkSecondsByUser(
+  companyId: string,
+  day: string,
+  opts?: { auth?: "auto_refresh" | "access_only" },
+): Promise<Map<string, number>> {
+  const monthStart = `${day.slice(0, 8)}01`;
+  const days = enumerateDays(monthStart, day);
+  const out = new Map<string, number>();
+
+  const concurrency = 6;
+  for (let i = 0; i < days.length; i += concurrency) {
+    const chunk = days.slice(i, i + concurrency);
+    const results = await Promise.all(chunk.map(async (d) => listDailyWorkSecondsByUser(companyId, d, opts)));
+    for (const m of results) {
+      for (const [userId, seconds] of m.entries()) {
+        out.set(userId, (out.get(userId) ?? 0) + (seconds ?? 0));
+      }
+    }
   }
 
   return out;

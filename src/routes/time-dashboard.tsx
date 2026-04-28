@@ -109,6 +109,7 @@ function TimeDashboardPage() {
           email: e.email,
           title: e.title ?? "",
           dailySeconds: e.dailySeconds ?? 0,
+          monthlySeconds: e.monthlySeconds ?? 0,
         };
       })
       .filter((r) => {
@@ -136,6 +137,7 @@ function TimeDashboardPage() {
         email: e.email,
         title: e.title,
         daily_hours: ((e.dailySeconds ?? 0) / 3600).toFixed(2),
+        monthly_hours: ((e.monthlySeconds ?? 0) / 3600).toFixed(2),
       })),
     );
     toast.success("Time dashboard exported");
@@ -225,6 +227,7 @@ function TimeDashboardPage() {
                 <th align="left">Employee</th>
                 <th align="left">Title</th>
                 <th align="right">Daily hours</th>
+                <th align="right">Monthly hours</th>
               </tr>
             </thead>
             <tbody>
@@ -261,6 +264,7 @@ function TimeDashboardPage() {
                   </td>
                   <td className="text-muted-foreground">{e.title || "—"}</td>
                   <td align="right" className="font-mono">{((e.dailySeconds ?? 0) / 3600).toFixed(2)}</td>
+                  <td align="right" className="font-mono">{((e.monthlySeconds ?? 0) / 3600).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
