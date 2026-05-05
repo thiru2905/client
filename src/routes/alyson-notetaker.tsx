@@ -265,7 +265,7 @@ function SessionPanel({ botId }: { botId: string | null }) {
           <div className="text-[12px] text-muted-foreground truncate">{botId}</div>
         </div>
         <button
-          onClick={() => notesM.mutate()}
+          onClick={() => notesM.mutate(undefined)}
           disabled={notesM.isPending}
           className="h-8 px-3 rounded-md bg-foreground text-background text-xs flex items-center gap-1.5 disabled:opacity-50"
         >
@@ -347,9 +347,7 @@ function SessionPanel({ botId }: { botId: string | null }) {
                   if (!plainNotes.trim()) return;
                   const title = session?.title ? `Meeting notes — ${session.title}` : "Meeting notes";
                   try {
-                    // @ts-expect-error: share is optional in many browsers
-                    if (navigator.share) {
-                      // @ts-expect-error: share is optional
+                    if ("share" in navigator && typeof navigator.share === "function") {
                       await navigator.share({ title, text: plainNotes });
                       return;
                     }

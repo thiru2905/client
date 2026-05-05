@@ -4,13 +4,14 @@ import {
   LayoutDashboard, Users, DollarSign, TrendingUp, Gift, PieChart, Calendar,
   Clock, FileText, GitBranch, BarChart3, Shield, HelpCircle, Sparkles,
   Moon, Sun, ChevronsLeft, ChevronsRight, LogOut, Search, Bot, Menu, X, Send,
-  Captions,
+  Captions, UserPlus,
 } from "lucide-react";
 import { useAuth, ROLE_LABEL, type AppRole } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
 import { NotificationsPopover } from "@/components/NotificationsPopover";
 import { CommandPalette } from "@/components/CommandPalette";
 import { streamAlyson, type ChatMsg } from "@/lib/ai-client";
+import { askMiniModuleAi } from "@/lib/mini-module-ai";
 
 type NavItem = {
   to: string;
@@ -21,11 +22,12 @@ type NavItem = {
   group: "Workspace" | "People" | "Money" | "Ops" | "Admin";
 };
 
-const NEW_BADGE_ROUTES = new Set<string>(["/bonus", "/time-dashboard", "/alyson-notetaker"]);
+const NEW_BADGE_ROUTES = new Set<string>(["/bonus", "/time-dashboard", "/alyson-notetaker", "/boarding"]);
 
 const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, group: "Workspace" },
   { to: "/team", label: "Team", icon: Users, group: "People", roles: ["super_admin", "ceo", "hr", "manager"] },
+  { to: "/boarding", label: "Boarding", icon: UserPlus, group: "People", roles: ["super_admin", "ceo", "hr"] },
   { to: "/time-dashboard", label: "Time Dashboard", icon: Clock, group: "People" },
   { to: "/performance", label: "Performance", icon: TrendingUp, group: "People" },
   { to: "/leave", label: "Leave", icon: Calendar, group: "People" },
@@ -50,6 +52,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [miniAiOpen, setMiniAiOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   const visible = NAV.filter((n) => !n.roles || hasAnyRole(n.roles));
@@ -197,6 +200,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </main>
 
       {aiOpen && <AiPanel onClose={() => setAiOpen(false)} pagePath={location.pathname} />}
+      <MiniModuleAiFab
+        open={miniAiOpen}
+        onToggle={() => setMiniAiOpen((v) => !v)}
+        onClose={() => setMiniAiOpen(false)}
+        pagePath={location.pathname}
+      />
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>
   );
@@ -223,7 +232,7 @@ function TopBar({ onAi, onMenu, onSearch }: { onAi: () => void; onMenu: () => vo
 
 function AiPanel({ onClose, pagePath }: { onClose: () => void; pagePath: string }) {
   const [messages, setMessages] = useState<ChatMsg[]>([
-    { role: "assistant", content: `Hi — I'm Alyson, your operations copilot. I can see you're on ${pagePath}. Ask me about formulas, payroll projections, equity vesting, or any KPI on this page.` },
+    { role: "assistant", content: `Hi, I'm Alyson, your operations copilot. I can see you're on ${pagePath}. Ask me about formulas, payroll projections, equity vesting, or any KPI on this page.` },
   ]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -299,6 +308,365 @@ function AiPanel({ onClose, pagePath }: { onClose: () => void; pagePath: string 
           </button>
         </form>
       </aside>
+    </>
+  );
+}
+
+function MiniModuleAiFab({
+  open,
+  onToggle,
+  onClose,
+  pagePath,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onClose: () => void;
+  pagePath: string;
+}) {
+  const alysonFaceSrc = "/images/alyson-mini.svg";
+  const [messages, setMessages] = useState<ChatMsg[]>([
+    {
+      role: "assistant",
+      content:
+        "Hi, I’m Alyson Mini. I can answer questions only about the page/module you’re currently on.",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+  }, [messages, open]);
+
+  // Reset context when module changes (keep it strict per user request).
+  useEffect(() => {
+    if (!open) return;
+    setMessages([
+      {
+        role: "assistant",
+        content:
+          "Hi — I’m Alyson Mini. I can answer questions only about the page/module you’re currently on.",
+      },
+    ]);
+    setInput("");
+    setLoading(false);
+  }, [pagePath, open]);
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const q = input.trim();
+    setInput("");
+    setLoading(true);
+
+    setMessages((prev) => [...prev, { role: "user", content: q }, { role: "assistant", content: "" }]);
+
+    try {
+      // Never reveal hidden prompts / internal instructions.
+      if (
+        /(system\s+prompt|prompt\s*injection|developer\s+message|hidden\s+instructions|your\s+instructions|what\s+prompt)/i.test(
+          q,
+        )
+      ) {
+        setMessages((prev) => {
+          const copy = [...prev];
+          copy[copy.length - 1] = {
+            role: "assistant",
+            content:
+              "I can’t share my internal instructions. Ask me a question about this module’s data or actions instead.",
+          };
+          return copy;
+        });
+        setLoading(false);
+        return;
+      }
+
+      const liveCtx = typeof window !== "undefined" ? (window as any).__ALYSON_MINI_CONTEXT__ : null;
+      const contextText = liveCtx ? JSON.stringify(liveCtx, null, 2) : undefined;
+
+      // Deterministic answers for dashboard-style questions (avoid AI gibberish).
+      if (String(pagePath).startsWith("/time-dashboard") && liveCtx?.module === "time-dashboard") {
+        const allToday = Array.isArray(liveCtx?.employees_all_today) ? liveCtx.employees_all_today : [];
+        const onlyNames = /\bonly\s+names?\b/i.test(q) || /\bno\s+fluff\b/i.test(q);
+
+        const betweenMatch = q.match(/\bbetween\s*(\d+(?:\.\d+)?)\s*(?:and|to)\s*(\d+(?:\.\d+)?)/i);
+        const betweenA = betweenMatch ? Number.parseFloat(betweenMatch[1]) : null;
+        const betweenB = betweenMatch ? Number.parseFloat(betweenMatch[2]) : null;
+        const wantsBetweenDaily =
+          betweenA != null &&
+          betweenB != null &&
+          Number.isFinite(betweenA) &&
+          Number.isFinite(betweenB) &&
+          /(hour|hours|hrs)/i.test(q) &&
+          /(today|daily)/i.test(q) &&
+          /\bbetween\b/i.test(q);
+
+        const thresholdMatch =
+          q.match(/(?:greater\s+than|more\s+than|over|above|>|>=)\s*(\d+(?:\.\d+)?)/i) ??
+          q.match(/(\d+(?:\.\d+)?)\s*(?:hours|hour|hrs)\b/i);
+        const threshold = thresholdMatch ? Number.parseFloat(thresholdMatch[1]) : null;
+        const wantsThresholdList =
+          threshold != null &&
+          Number.isFinite(threshold) &&
+          /(hour|hours|hrs)/i.test(q) &&
+          /(today|daily)/i.test(q) &&
+          /(who|which|list|employees)/i.test(q) &&
+          /(greater\s+than|more\s+than|over|above|>|>=)/i.test(q);
+
+        const wantsMonthlyThreshold =
+          threshold != null &&
+          Number.isFinite(threshold) &&
+          /(month|monthly)/i.test(q) &&
+          /(hour|hours|hrs)/i.test(q) &&
+          /(greater\s+than|more\s+than|over|above|>|>=)/i.test(q) &&
+          /(who|which|list|employees|names)/i.test(q);
+
+        const wantsCountGt3 =
+          /(how\s+many|number\s+of|count)/i.test(q) && />\s*3|greater\s+than\s+3|\bgt\s*3\b/i.test(q) && /(hour|hours|hrs)/i.test(q) && /(today|daily)/i.test(q);
+        const wantsHighestToday =
+          /highest/i.test(q) && /(hour|hours|hrs)/i.test(q) && /(today|daily)/i.test(q);
+        const wantsZeroToday =
+          /(who|which|list)/i.test(q) && /(0|zero)/i.test(q) && /(hour|hours|hrs)/i.test(q) && /(today|daily)/i.test(q);
+
+        if (wantsBetweenDaily) {
+          const lo = Math.min(betweenA as number, betweenB as number);
+          const hi = Math.max(betweenA as number, betweenB as number);
+          const filtered = allToday
+            .filter(
+              (e: any) =>
+                typeof e?.daily_hours === "number" &&
+                Number.isFinite(e.daily_hours) &&
+                e.daily_hours >= lo &&
+                e.daily_hours <= hi,
+            )
+            .sort((a: any, b: any) => (b.daily_hours ?? 0) - (a.daily_hours ?? 0));
+
+          const lines = onlyNames
+            ? filtered.map((e: any) => String(e.name)).slice(0, 200)
+            : filtered.map((e: any) => `${e.name} — ${Number(e.daily_hours).toFixed(2)}h`).slice(0, 80);
+
+          setMessages((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = {
+              role: "assistant",
+              content: lines.length ? lines.join("\n") : "No employees match that range.",
+            };
+            return copy;
+          });
+          setLoading(false);
+          return;
+        }
+
+        if (wantsMonthlyThreshold) {
+          const filtered = allToday
+            .filter(
+              (e: any) =>
+                typeof e?.monthly_hours === "number" &&
+                Number.isFinite(e.monthly_hours) &&
+                e.monthly_hours > (threshold as number),
+            )
+            .sort((a: any, b: any) => (b.monthly_hours ?? 0) - (a.monthly_hours ?? 0));
+
+          const lines = onlyNames
+            ? filtered.map((e: any) => String(e.name)).slice(0, 200)
+            : filtered.map((e: any) => `${e.name} — ${Number(e.monthly_hours).toFixed(2)}h`).slice(0, 80);
+
+          setMessages((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = {
+              role: "assistant",
+              content: lines.length ? lines.join("\n") : "No employees match that filter.",
+            };
+            return copy;
+          });
+          setLoading(false);
+          return;
+        }
+
+        if (wantsThresholdList) {
+          const filtered = allToday
+            .filter((e: any) => typeof e?.daily_hours === "number" && Number.isFinite(e.daily_hours) && e.daily_hours > (threshold as number))
+            .sort((a: any, b: any) => (b.daily_hours ?? 0) - (a.daily_hours ?? 0));
+          const names = onlyNames
+            ? filtered.slice(0, 200).map((e: any) => String(e.name))
+            : filtered.slice(0, 80).map((e: any) => `${e.name} — ${Number(e.daily_hours).toFixed(2)}h`);
+          const more = filtered.length > names.length ? `\n\n…and ${filtered.length - names.length} more.` : "";
+          const body = names.length ? names.join("\n") : "No employees match that filter.";
+          setMessages((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = {
+              role: "assistant",
+              content: `${body}${more}`,
+            };
+            return copy;
+          });
+          setLoading(false);
+          return;
+        }
+
+        if (wantsCountGt3) {
+          const n = typeof liveCtx?.employees_gt_3_hours_today_count === "number" ? liveCtx.employees_gt_3_hours_today_count : null;
+          if (n != null) {
+            setMessages((prev) => {
+              const copy = [...prev];
+              copy[copy.length - 1] = {
+                role: "assistant",
+                content: `${n} employee(s) have worked more than 3 hours today.`,
+              };
+              return copy;
+            });
+            setLoading(false);
+            return;
+          }
+        }
+        if (wantsHighestToday) {
+          const top = liveCtx?.highest_hours_today;
+          if (top?.name && typeof top?.daily_hours === "number") {
+            setMessages((prev) => {
+              const copy = [...prev];
+              copy[copy.length - 1] = {
+                role: "assistant",
+                content: `${top.name} has worked the highest hours today: ${top.daily_hours.toFixed(2)}h.`,
+              };
+              return copy;
+            });
+            setLoading(false);
+            return;
+          }
+        }
+        if (wantsZeroToday) {
+          const zero = Array.isArray(liveCtx?.employees_zero_hours_today_preview)
+            ? liveCtx.employees_zero_hours_today_preview
+            : [];
+          const count =
+            typeof liveCtx?.employees_zero_hours_today_count === "number"
+              ? liveCtx.employees_zero_hours_today_count
+              : null;
+          if (count != null) {
+            const names = zero.map((e: any) => e?.name).filter(Boolean).slice(0, 30);
+            const list = names.length ? `\n\nExamples:\n- ${names.join("\n- ")}` : "";
+            setMessages((prev) => {
+              const copy = [...prev];
+              copy[copy.length - 1] = {
+                role: "assistant",
+                content: `${count} employee(s) have 0 hours today.${list}`,
+              };
+              return copy;
+            });
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
+      const history = messages
+        .filter((m) => m && (m.role === "user" || m.role === "assistant"))
+        .slice(-8)
+        .map((m: any) => ({ role: m.role, content: String(m.content ?? "") }));
+      const res = await askMiniModuleAi({ data: { pagePath, question: q, history, contextText } });
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: "assistant", content: res.answer };
+        return copy;
+      });
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : typeof e === "string" ? e : "Mini AI request failed";
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: "assistant", content: `⚠️ ${msg}` };
+        return copy;
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Floating robot button */}
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-label="Open Alyson Mini"
+        title="Alyson Mini"
+        className="fixed z-40 bottom-4 right-4 h-12 w-12 bg-transparent border-0 p-0"
+      >
+        <span className="sr-only">Alyson Mini</span>
+        <img
+          src={alysonFaceSrc}
+          alt=""
+          className={"h-12 w-12 rounded-full shadow-lg " + (open ? "ring-2 ring-ring/40" : "")}
+          draggable={false}
+          onError={(e) => {
+            // If asset missing, hide the <img> so the fallback icon can show.
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+        <Bot className="h-5 w-5 mx-auto -mt-9 opacity-0" aria-hidden />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30 bg-black/25" onClick={onClose} aria-hidden />
+          <div className="fixed z-40 bottom-20 right-4 w-[360px] max-w-[calc(100vw-32px)] rounded-xl border border-border bg-paper shadow-xl overflow-hidden">
+            <div className="h-10 px-3 border-b border-border flex items-center gap-2">
+              <img src={alysonFaceSrc} alt="" className="h-5 w-5 rounded-full" draggable={false} />
+              <div className="text-[13px] font-medium">Alyson Mini</div>
+              <div className="ml-auto">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="h-7 px-2 rounded-md text-[12px] text-muted-foreground hover:text-foreground hover:bg-muted"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div ref={scrollRef} className="max-h-[360px] overflow-y-auto p-3 space-y-2">
+              {messages.map((m, i) => (
+                <div key={i} className={m.role === "user" ? "ml-auto max-w-[88%]" : "max-w-[92%]"}>
+                  <div
+                    className={
+                      "rounded-lg px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap " +
+                      (m.role === "user" ? "bg-foreground text-background" : "bg-muted/60 text-foreground")
+                    }
+                  >
+                    {m.content || (loading && i === messages.length - 1 ? "…" : "")}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                send();
+              }}
+              className="p-2 border-t border-border flex gap-2"
+            >
+              <input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask about this module…"
+                disabled={loading}
+                className="flex-1 h-9 px-3 rounded-md border border-border bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={loading || !input.trim()}
+                className="h-9 w-9 grid place-items-center rounded-md bg-foreground text-background disabled:opacity-40"
+                aria-label="Send"
+                title="Send"
+              >
+                <Send className="h-3.5 w-3.5" />
+              </button>
+            </form>
+          </div>
+        </>
+      )}
     </>
   );
 }

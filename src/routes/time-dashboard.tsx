@@ -1,5 +1,5 @@
 import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader, TableScroll, EmptyState } from "@/components/AppShell";
 import { PageSkeleton } from "@/components/Skeleton";
@@ -127,6 +127,46 @@ function TimeDashboardPage() {
     () => employeeRollups.reduce((s, e) => s + (e.dailySeconds ?? 0), 0) / 3600,
     [employeeRollups],
   );
+
+  // Expose live dashboard context for the mini module AI (client-side).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const all = employeeRollups.map((e) => ({
+      employee_id: e.employee_id,
+      name: e.name,
+      email: e.email,
+      title: e.title,
+      daily_hours: Number(((e.dailySeconds ?? 0) / 3600).toFixed(2)),
+      monthly_hours: Number(((e.monthlySeconds ?? 0) / 3600).toFixed(2)),
+    }));
+
+    const top = all.slice(0, 5);
+    const top1 = top[0] ?? null;
+    const zero = all.filter((e) => (e.daily_hours ?? 0) <= 0);
+    const gt3 = all.filter((e) => (e.daily_hours ?? 0) > 3);
+
+    (window as any).__ALYSON_MINI_CONTEXT__ = {
+      module: "time-dashboard",
+      day,
+      company: data?.company?.name ?? "",
+      total_hours_today: Number(totalHours.toFixed(2)),
+      // Full list for dynamic filters (expected small ~tens of employees).
+      employees_all_today: all,
+      employees_total: all.length,
+      employees_gt_3_hours_today_count: gt3.length,
+      employees_gt_3_hours_today_preview: gt3.slice(0, 25),
+      employees_zero_hours_today_count: zero.length,
+      employees_zero_hours_today_preview: zero.slice(0, 50),
+      top_employees_today: top,
+      highest_hours_today: top1,
+      generated_at: new Date().toISOString(),
+    };
+    return () => {
+      // Avoid leaking the previous module context when navigating away.
+      const cur = (window as any).__ALYSON_MINI_CONTEXT__;
+      if (cur?.module === "time-dashboard") (window as any).__ALYSON_MINI_CONTEXT__ = undefined;
+    };
+  }, [employeeRollups, totalHours, day, data?.company?.name]);
 
   const exportCsv = () => {
     if (!employeeRollups.length) return toast.error("No employees to export");

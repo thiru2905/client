@@ -112,6 +112,7 @@ function TimeDoctorEmployeePage() {
           <>
             <Link
               to="/time-dashboard"
+              search={{}}
               className="h-8 px-3 rounded-md border border-border text-xs flex items-center gap-1.5 hover:bg-muted"
             >
               <ArrowLeft className="h-3.5 w-3.5" />

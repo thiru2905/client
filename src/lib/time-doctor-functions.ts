@@ -115,7 +115,8 @@ export const fetchTimeDoctorUserDetail = createServerFn({ method: "GET" })
         warnings.push(`apps: ${String(e)}`);
         return [];
       });
-      const categoryTotals = new Map<TimeDoctorUserDetail["apps"]["distribution"][number]["category"], number>();
+      type AppCategory = NonNullable<TimeDoctorUserDetail["apps"]>["distribution"][number]["category"];
+      const categoryTotals = new Map<AppCategory, number>();
       const toolTotals = new Map<string, { name: string; category: "productive" | "neutral" | "distracting"; seconds: number }>();
       for (const a of appUsage) {
         categoryTotals.set(a.category, (categoryTotals.get(a.category) ?? 0) + a.timeSpend);

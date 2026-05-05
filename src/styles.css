@@ -223,6 +223,25 @@
 .ops-dense .ops-table td, .ops-dense .ops-table th { padding: 8px 12px; }
 .ops-dense .ops-table tr { border-bottom: 1px solid var(--border); }
 
+/* Global: pointer cursor for interactive controls */
+button,
+a,
+[role="button"] {
+  cursor: pointer;
+}
+button:disabled,
+[role="button"][aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+/* Boarding: hide native horizontal scrollbar for tab strip */
+.boarding-tabs-scroll {
+  scrollbar-width: none; /* Firefox */
+}
+.boarding-tabs-scroll::-webkit-scrollbar {
+  display: none; /* Chromium */
+}
+
 /* Status pills */
 .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 500; line-height: 1.4; }
 .pill-success { background: color-mix(in oklab, var(--success) 14%, transparent); color: var(--success); }
