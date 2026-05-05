@@ -12,9 +12,17 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminPage() {
-  const { realRoles, demoRole } = useAuth();
-  const effective = demoRole ? [demoRole] : realRoles;
+  const auth = useAuth();
+  const effective = auth.demoRole ? [auth.demoRole] : auth.realRoles;
   const [usersOpen, setUsersOpen] = useState(false);
+
+  if (!auth.hasRole("super_admin")) {
+    return (
+      <div>
+        <PageHeader eyebrow="Admin" title="Access denied" description="This area is restricted to Super Admins." />
+      </div>
+    );
+  }
 
   const sections = [
     { key: "users", icon: Users, title: "Users & roles", desc: "Manage who has access and what they can do.", action: () => setUsersOpen(true) },

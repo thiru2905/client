@@ -12,6 +12,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   // Prefer `frontend/.env` for standalone frontend runs and Vercel deployments.
   envDir: __dirname,
+  // Allow NEXT_PUBLIC_* vars (Clerk) in addition to VITE_*
+  envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   server: {
     port: 3000,
   },

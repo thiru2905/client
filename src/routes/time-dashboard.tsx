@@ -8,6 +8,7 @@ import { Clock, Download, RefreshCw, AlertTriangle } from "lucide-react";
 import { downloadCSV } from "@/lib/csv";
 import { toast } from "sonner";
 import { z } from "zod";
+import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/time-dashboard")({
   head: () => ({ meta: [{ title: "Time Dashboard — Alyson HR" }] }),
@@ -30,6 +31,31 @@ function isIsoDate(v: unknown): v is string {
 }
 
 function TimeDashboardPage() {
+  const auth = useAuth();
+  if (!auth.hasRole("super_admin")) {
+    return (
+      <div className="ops-dense">
+        <PageHeader
+          eyebrow="People"
+          title="Time Dashboard"
+          description="Super admin only."
+          dense
+        />
+        <div className="px-5 md:px-8 py-6">
+          <div className="surface-card p-8 text-center">
+            <div className="mx-auto h-10 w-10 rounded-full bg-muted grid place-items-center text-muted-foreground mb-3">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="font-medium text-[15px]">Access denied</div>
+            <div className="text-[13px] text-muted-foreground mt-1">
+              This feature is restricted to Super Admins.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const [q, setQ] = useState("");
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });

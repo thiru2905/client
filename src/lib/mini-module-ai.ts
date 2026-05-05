@@ -59,7 +59,7 @@ function moduleContext(moduleId: string) {
 export const askMiniModuleAi = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => AskInput.parse(data))
   .handler(async ({ data }) => {
-    const apiKey = process.env.ALYSON_MINI_MODULE_AI_API_KEY;
+    const apiKey = process.env.ALYSON_MINI_MODULE_AI_API_KEY || process.env.GROQ_API_KEY;
     if (!apiKey) throw new Response("Missing ALYSON_MINI_MODULE_AI_API_KEY", { status: 500 });
 
     const moduleId = moduleFromPath(data.pagePath);
@@ -96,7 +96,7 @@ export const askMiniModuleAi = createServerFn({ method: "POST" })
         Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: process.env.ALYSON_MINI_MODULE_AI_MODEL || "llama-3.1-8b-instant",
+        model: process.env.ALYSON_MINI_MODULE_AI_MODEL || process.env.GROQ_MODEL || "llama-3.1-8b-instant",
         temperature: 0.2,
         messages,
       }),

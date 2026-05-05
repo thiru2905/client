@@ -12,6 +12,7 @@ import { NotificationsPopover } from "@/components/NotificationsPopover";
 import { CommandPalette } from "@/components/CommandPalette";
 import { streamAlyson, type ChatMsg } from "@/lib/ai-client";
 import { askMiniModuleAi } from "@/lib/mini-module-ai";
+import { toast } from "sonner";
 
 type NavItem = {
   to: string;
@@ -28,7 +29,7 @@ const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, group: "Workspace" },
   { to: "/team", label: "Team", icon: Users, group: "People", roles: ["super_admin", "ceo", "hr", "manager"] },
   { to: "/boarding", label: "Boarding", icon: UserPlus, group: "People", roles: ["super_admin", "ceo", "hr"] },
-  { to: "/time-dashboard", label: "Time Dashboard", icon: Clock, group: "People" },
+  { to: "/time-dashboard", label: "Time Dashboard", icon: Clock, group: "People", roles: ["super_admin"] },
   { to: "/performance", label: "Performance", icon: TrendingUp, group: "People" },
   { to: "/leave", label: "Leave", icon: Calendar, group: "People" },
   { to: "/attendance", label: "Attendance", icon: Clock, group: "People" },
@@ -38,7 +39,7 @@ const NAV: NavItem[] = [
   { to: "/workflows", label: "Workflows", icon: GitBranch, group: "Ops" },
   { to: "/documents", label: "Documents", icon: FileText, group: "Ops" },
   { to: "/reports", label: "Reports", icon: BarChart3, group: "Ops", roles: ["super_admin", "ceo", "finance", "hr"] },
-  { to: "/alyson-notetaker", label: "Alyson Notetaker", icon: Captions, group: "Ops" },
+  { to: "/alyson-notetaker", label: "Alyson Notetaker", icon: Captions, group: "Ops", roles: ["super_admin"] },
   { to: "/admin", label: "Admin", icon: Shield, group: "Admin", roles: ["super_admin"] },
   { to: "/help", label: "Help", icon: HelpCircle, group: "Admin" },
 ];
@@ -47,13 +48,17 @@ const ROLES: AppRole[] = ["super_admin", "ceo", "finance", "hr", "manager", "emp
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { hasAnyRole, primaryRole, demoRole, setDemoRole, signOut, user } = useAuth();
+  const { hasAnyRole, primaryRole, demoRole, setDemoRole, signOut, user, tryUnlockSuperAdmin, superAdminUnlocked } = useAuth();
   const { theme, toggle } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [miniAiOpen, setMiniAiOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [superAdminPromptOpen, setSuperAdminPromptOpen] = useState(false);
+  const [superAdminCode, setSuperAdminCode] = useState("");
+  const [superAdminError, setSuperAdminError] = useState<string | null>(null);
+  const [pendingRole, setPendingRole] = useState<AppRole | null>(null);
 
   const visible = NAV.filter((n) => !n.roles || hasAnyRole(n.roles));
   const grouped = groupBy(visible, (n) => n.group);
@@ -82,6 +87,61 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex w-full bg-background text-foreground">
       {mobileOpen && (
         <div className="fixed inset-0 z-30 bg-black/40 md:hidden" onClick={() => setMobileOpen(false)} aria-hidden />
+      )}
+      {superAdminPromptOpen && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-black/50 px-4" aria-hidden={false}>
+          <div className="w-full max-w-sm rounded-lg border border-border bg-background shadow-xl p-4">
+            <div className="font-medium text-[14px]">Super admin verification</div>
+            <div className="mt-1 text-[12px] text-muted-foreground">
+              Enter the 5-digit code to enable Super Admin access on this device.
+            </div>
+            <input
+              value={superAdminCode}
+              onChange={(e) => {
+                setSuperAdminError(null);
+                setSuperAdminCode(e.target.value.replace(/\D/g, "").slice(0, 5));
+              }}
+              inputMode="numeric"
+              autoFocus
+              placeholder="•••••"
+              className="mt-3 w-full h-10 rounded-md border border-border bg-background px-3 font-mono text-[16px] tracking-[0.3em]"
+            />
+            {superAdminError && (
+              <div className="mt-2 text-[12px] text-destructive">{superAdminError}</div>
+            )}
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                onClick={() => {
+                  setSuperAdminPromptOpen(false);
+                  setSuperAdminCode("");
+                  setSuperAdminError(null);
+                  setPendingRole(null);
+                }}
+                className="h-9 px-3 rounded-md border border-border text-[12px] hover:bg-muted"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const ok = tryUnlockSuperAdmin(superAdminCode);
+                  if (!ok) {
+                    setSuperAdminError("Invalid code");
+                    return;
+                  }
+                  toast.success("Super admin access granted");
+                  setSuperAdminPromptOpen(false);
+                  setSuperAdminCode("");
+                  setSuperAdminError(null);
+                  if (pendingRole) setDemoRole(pendingRole);
+                  setPendingRole(null);
+                }}
+                className="h-9 px-3 rounded-md bg-foreground text-background text-[12px] hover:opacity-90"
+              >
+                Verify
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <aside
@@ -166,7 +226,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
               <select
                 value={demoRole ?? primaryRole}
-                onChange={(e) => setDemoRole(e.target.value as AppRole)}
+                onChange={(e) => {
+                  const next = e.target.value as AppRole;
+                  if (next === "super_admin" && !superAdminUnlocked) {
+                    setPendingRole(next);
+                    setSuperAdminPromptOpen(true);
+                    setSuperAdminCode("");
+                    setSuperAdminError(null);
+                    return;
+                  }
+                  setDemoRole(next);
+                }}
                 className="w-full h-7 rounded bg-paper border border-border text-xs px-1.5"
               >
                 {ROLES.map((r) => (

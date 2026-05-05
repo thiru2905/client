@@ -12,6 +12,8 @@ import {
 } from "@/lib/alyson-notetaker-functions";
 import { Captions, Plus, RefreshCw, Sparkles, Copy, Send } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/lib/auth";
+import { askMiniModuleAi } from "@/lib/mini-module-ai";
 
 export const Route = createFileRoute("/alyson-notetaker")({
   head: () => ({ meta: [{ title: "Alyson Notetaker — Alyson HR" }] }),
@@ -19,6 +21,31 @@ export const Route = createFileRoute("/alyson-notetaker")({
 });
 
 function AlysonNotetakerPage() {
+  const auth = useAuth();
+  if (!auth.hasRole("super_admin")) {
+    return (
+      <div className="ops-dense">
+        <PageHeader
+          eyebrow="Operations"
+          title="Alyson Notetaker"
+          description="Super admin only."
+          dense
+        />
+        <div className="px-5 md:px-8 py-6">
+          <div className="surface-card p-8 text-center">
+            <div className="mx-auto h-10 w-10 rounded-full bg-muted grid place-items-center text-muted-foreground mb-3">
+              <Captions className="h-5 w-5" />
+            </div>
+            <div className="font-medium text-[15px]">Access denied</div>
+            <div className="text-[13px] text-muted-foreground mt-1">
+              This feature is restricted to Super Admins.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const sessionsQ = useQuery({ queryKey: ["alyson-notetaker", "sessions"], queryFn: () => listNotetakerSessions() });
   const [picked, setPicked] = useState<string | null>(null);
 
@@ -179,6 +206,12 @@ function SessionPanel({ botId }: { botId: string | null }) {
   const [notesModel, setNotesModel] = useState<string>("");
   const [copied, setCopied] = useState(false);
   const [transcriptCopied, setTranscriptCopied] = useState(false);
+  type ChatMsg = { role: "user" | "assistant"; content: string };
+  const [chatMsgs, setChatMsgs] = useState<ChatMsg[]>([
+    { role: "assistant", content: "Ask me questions about this meeting only. I will answer using the transcript + notes." },
+  ]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
 
   const mergedLines = useMemo(() => {
     const staticLines = q.data?.lines ?? [];
@@ -195,10 +228,45 @@ function SessionPanel({ botId }: { botId: string | null }) {
     return uniq;
   }, [q.data, live]);
 
+  const session = q.data?.session;
+  const plainNotes = notes ? notesToPlainText(notes) : "";
+  const plainTranscript = mergedLines
+    .map((L) => {
+      const who = (L.participant?.name || "Speaker").trim();
+      const text = String(L.text || "").trim();
+      if (!text) return "";
+      return `${who}: ${text}`;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const contextText = useMemo(() => {
+    const s = session;
+    const header = [
+      "Meeting context (source of truth):",
+      s?.title ? `Title: ${s.title}` : "",
+      s?.meetingUrl ? `Meeting URL: ${s.meetingUrl}` : "",
+      s?.createdAt ? `Created at: ${s.createdAt}` : "",
+      "",
+      "Transcript (chronological):",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const transcript = plainTranscript || "(no transcript lines)";
+    const notesBlock = plainNotes ? `\n\nMeeting notes (generated):\n${plainNotes}\n` : "\n\nMeeting notes (generated):\n(none)\n";
+
+    // askMiniModuleAi caps contextText at 40k chars; keep some buffer.
+    return (header + "\n" + transcript + notesBlock).slice(0, 38_000);
+  }, [session, plainTranscript, plainNotes]);
+
   useEffect(() => {
     setLive([]);
     setNotes("");
     setNotesModel("");
+    setChatMsgs([{ role: "assistant", content: "Ask me questions about this meeting only. I will answer using the transcript + notes." }]);
+    setChatInput("");
+    setChatLoading(false);
     if (!botId) return;
     const url = `${String(base).replace(/\/$/, "")}/session/${encodeURIComponent(botId)}/events`;
     const es = new EventSource(url);
@@ -245,17 +313,39 @@ function SessionPanel({ botId }: { botId: string | null }) {
     );
   }
 
-  const session = q.data?.session;
-  const plainNotes = notes ? notesToPlainText(notes) : "";
-  const plainTranscript = mergedLines
-    .map((L) => {
-      const who = (L.participant?.name || "Speaker").trim();
-      const text = String(L.text || "").trim();
-      if (!text) return "";
-      return `${who}: ${text}`;
-    })
-    .filter(Boolean)
-    .join("\n");
+  const sendChat = async () => {
+    const question = chatInput.trim();
+    if (!question || chatLoading) return;
+    const next: ChatMsg[] = [...chatMsgs, { role: "user", content: question }, { role: "assistant", content: "" }];
+    setChatMsgs(next);
+    setChatInput("");
+    setChatLoading(true);
+    try {
+      const history = next.slice(0, -1).slice(-20);
+      const res = await askMiniModuleAi({
+        data: {
+          pagePath: "/alyson-notetaker",
+          question,
+          contextText,
+          history,
+        },
+      });
+      setChatMsgs((m) => {
+        const copy = [...m];
+        copy[copy.length - 1] = { role: "assistant", content: res.answer };
+        return copy;
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to chat.";
+      setChatMsgs((m) => {
+        const copy = [...m];
+        copy[copy.length - 1] = { role: "assistant", content: `⚠️ ${msg}` };
+        return copy;
+      });
+    } finally {
+      setChatLoading(false);
+    }
+  };
 
   return (
     <div className="surface-card p-4">
@@ -378,6 +468,54 @@ function SessionPanel({ botId }: { botId: string | null }) {
               <div className="text-[13px] text-muted-foreground">Generate notes to summarize the transcript.</div>
             )}
           </div>
+        </div>
+      </div>
+
+      <div className="mt-4 border border-border rounded-lg overflow-hidden">
+        <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center justify-between gap-2">
+          <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-medium">Chat about this meeting</div>
+          <div className="text-[11px] text-muted-foreground truncate">Uses transcript + notes</div>
+        </div>
+        <div className="p-3">
+          <div className="max-h-[260px] overflow-y-auto space-y-2">
+            {chatMsgs.map((m, i) => (
+              <div key={i} className={m.role === "user" ? "ml-auto max-w-[85%]" : "max-w-[90%]"}>
+                <div
+                  className={
+                    "rounded-lg px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap " +
+                    (m.role === "user" ? "bg-foreground text-background" : "bg-muted/60 text-foreground")
+                  }
+                >
+                  {m.content || (chatLoading && i === chatMsgs.length - 1 ? "…" : "")}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void sendChat();
+            }}
+            className="mt-3 flex gap-2"
+          >
+            <input
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              placeholder="Ask about decisions, action items, risks, owners…"
+              disabled={chatLoading}
+              className="flex-1 h-9 px-3 rounded-md border border-border bg-background text-[13px] focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={chatLoading || !chatInput.trim()}
+              className="h-9 w-9 grid place-items-center rounded-md bg-foreground text-background disabled:opacity-40"
+              aria-label="Send"
+              title="Send"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </button>
+          </form>
         </div>
       </div>
     </div>
