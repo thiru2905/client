@@ -17,7 +17,13 @@ export const Route = createFileRoute("/team")({
 });
 
 function TeamPage() {
-  const { data, isLoading } = useQuery({ queryKey: ["overview"], queryFn: fetchOverview });
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({ queryKey: ["overview"], queryFn: fetchOverview });
   const [q, setQ] = useState("");
   const [dept, setDept] = useState<string>("all");
   const [view, setView] = useState<"directory" | "chart">("directory");
@@ -25,7 +31,45 @@ function TeamPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const auth = useAuth();
 
-  if (isLoading || !data) return <PageSkeleton />;
+  if (isLoading) return <PageSkeleton />;
+
+  if (isError) {
+    const msg =
+      (error instanceof Error ? error.message : String(error ?? "")) ||
+      "Unknown error";
+
+    const missingEnv =
+      msg.toLowerCase().includes("missing supabase environment variables") ||
+      msg.toLowerCase().includes("vite_supabase_url") ||
+      msg.toLowerCase().includes("vite_supabase_publishable_key");
+
+    return (
+      <div className="ops-dense">
+        <PageHeader eyebrow="People" title="Team directory" description="Browse, filter, and drill into every active employee across the organization." />
+        <div className="px-5 md:px-8 py-10">
+          <EmptyState
+            icon={Users}
+            title="Unable to load team members"
+            description={
+              missingEnv
+                ? "Your deployment is missing Supabase client env vars. Add VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY to your hosting provider and redeploy."
+                : msg
+            }
+            actions={
+              <button
+                onClick={() => refetch()}
+                className="h-8 px-3 rounded-md bg-foreground text-background text-[12px] font-medium"
+              >
+                Retry
+              </button>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return <PageSkeleton />;
 
   const filtered = data.employees.filter((e) => {
     if (dept !== "all" && e.department_id !== dept) return false;
