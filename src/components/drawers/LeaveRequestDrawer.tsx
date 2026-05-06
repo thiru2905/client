@@ -5,11 +5,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Field, TextInput, TextArea, Select, PrimaryBtn, GhostBtn, FormFooter } from "@/components/forms/FormField";
 import { useAuth } from "@/lib/auth";
+import { fetchOverview } from "@/lib/queries";
 
 export function LeaveRequestDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const qc = useQueryClient();
   const auth = useAuth();
   const canRequestForOthers = auth.hasAnyRole(["super_admin", "hr", "manager"]);
+
+  const useOverviewForEmployees =
+    String(import.meta.env.VITE_HR_OVERVIEW_SOURCE ?? "").trim().toLowerCase() === "s3" ||
+    String(import.meta.env.VITE_DEMO_MODE ?? "").trim().toLowerCase() === "true";
 
   const { data: myProfile } = useQuery({
     queryKey: ["my-profile", auth.user?.id],
@@ -37,7 +42,16 @@ export function LeaveRequestDrawer({ open, onClose }: { open: boolean; onClose: 
   const { data: emps } = useQuery({
     queryKey: ["emps-list"],
     queryFn: async () => {
-      const { data } = await supabase.from("employees").select("id, full_name").order("full_name");
+      if (useOverviewForEmployees) {
+        const o = await fetchOverview();
+        return (o.employees ?? [])
+          .map((e) => ({ id: e.id, full_name: e.full_name }))
+          .sort((a, b) => a.full_name.localeCompare(b.full_name));
+      }
+      const { data } = await supabase
+        .from("employees")
+        .select("id, full_name")
+        .order("full_name");
       return data ?? [];
     },
     enabled: open && canRequestForOthers,

@@ -5,11 +5,20 @@ import { supabase } from "@/integrations/supabase/client";
 import { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { createEmployeeAndUserAsAdmin } from "@/lib/admin-functions";
+import { fetchOverview } from "@/lib/queries";
 
 export function CreateUserDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const useOverviewForDeps =
+    String(import.meta.env.VITE_HR_OVERVIEW_SOURCE ?? "").trim().toLowerCase() === "s3" ||
+    String(import.meta.env.VITE_DEMO_MODE ?? "").trim().toLowerCase() === "true";
+
   const { data: deps } = useQuery({
     queryKey: ["departments-create-user"],
     queryFn: async () => {
+      if (useOverviewForDeps) {
+        const o = await fetchOverview();
+        return o.departments;
+      }
       const { data, error } = await supabase.from("departments").select("id, name").order("name");
       if (error) throw error;
       return data ?? [];

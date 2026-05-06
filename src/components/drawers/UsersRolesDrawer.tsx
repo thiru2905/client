@@ -7,16 +7,30 @@ import { ROLE_LABEL, type AppRole } from "@/lib/auth";
 import { TextInput, Field, GhostBtn } from "@/components/forms/FormField";
 import { Search, Plus, Trash2 } from "lucide-react";
 import { deleteUserAsAdmin, linkUserToEmployeeAsAdmin } from "@/lib/admin-functions";
+import { fetchOverview } from "@/lib/queries";
 
 const ROLES: AppRole[] = ["super_admin", "ceo", "finance", "hr", "manager", "employee"];
 
 export function UsersRolesDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [q, setQ] = useState("");
 
+  const useOverviewForEmployees =
+    String(import.meta.env.VITE_HR_OVERVIEW_SOURCE ?? "").trim().toLowerCase() === "s3" ||
+    String(import.meta.env.VITE_DEMO_MODE ?? "").trim().toLowerCase() === "true";
+
   const { data: employees } = useQuery({
     queryKey: ["employees-mini"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("employees").select("id, full_name, email").order("full_name");
+      if (useOverviewForEmployees) {
+        const o = await fetchOverview();
+        return (o.employees ?? [])
+          .map((e) => ({ id: e.id, full_name: e.full_name, email: e.email }))
+          .sort((a, b) => a.full_name.localeCompare(b.full_name));
+      }
+      const { data, error } = await supabase
+        .from("employees")
+        .select("id, full_name, email")
+        .order("full_name");
       if (error) throw error;
       return data ?? [];
     },
