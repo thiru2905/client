@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { fetchOverview, type EmployeeFull } from "@/lib/queries";
 import { PageHeader, EmptyState } from "@/components/AppShell";
 import { PageSkeleton } from "@/components/Skeleton";
@@ -10,6 +10,8 @@ import { OrgChart } from "@/components/OrgChart";
 import { EmployeeDrawer } from "@/components/drawers/EmployeeDrawer";
 import { CreateUserDrawer } from "@/components/drawers/CreateUserDrawer";
 import { useAuth } from "@/lib/auth";
+import { syncHrOverviewToS3 } from "@/lib/hr-s3-overview-functions";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/team")({
   head: () => ({ meta: [{ title: "Team — Alyson HR" }] }),
@@ -30,6 +32,19 @@ function TeamPage() {
   const [picked, setPicked] = useState<EmployeeFull | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const auth = useAuth();
+
+  const syncToS3 = useMutation({
+    mutationFn: async (source: "demo" | "supabase") => {
+      return await syncHrOverviewToS3({ data: { source } });
+    },
+    onSuccess: (r) => {
+      toast.success(`Synced team snapshot to S3 (${r.bucket})`);
+      refetch();
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : "Failed to sync to S3");
+    },
+  });
 
   if (isLoading) return <PageSkeleton />;
 
@@ -85,6 +100,16 @@ function TeamPage() {
         description="Browse, filter, and drill into every active employee across the organization."
         actions={
           <div className="flex items-center gap-2">
+            {auth.hasRole("super_admin") && (
+              <button
+                onClick={() => syncToS3.mutate("demo")}
+                disabled={syncToS3.isPending}
+                className="h-7 px-2.5 rounded-md border border-border bg-paper text-[11.5px] font-medium inline-flex items-center gap-1.5 disabled:opacity-60"
+                title="Write demo team snapshot to S3 (creates bucket if missing)"
+              >
+                {syncToS3.isPending ? "Syncing…" : "Sync demo → S3"}
+              </button>
+            )}
             {auth.hasRole("super_admin") && (
               <button
                 onClick={() => setCreateOpen(true)}

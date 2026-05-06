@@ -1,4 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
+import { getHrOverviewFromS3 } from "@/lib/hr-s3-overview-functions";
+import { demoOverviewParts, fetchOverviewPartsFromSupabase } from "@/lib/queries-hr-parts";
 
 export type Department = { id: string; name: string };
 export type Employee = {
@@ -53,24 +55,13 @@ export type EmployeeFull = Employee & {
   effective_bonus: number;
 };
 
-export async function fetchOverview() {
-  const [deps, emps, comps, metrics] = await Promise.all([
-    supabase.from("departments").select("*").order("name"),
-    supabase.from("employees").select("*"),
-    supabase.from("compensation").select("*"),
-    supabase.from("metrics_history").select("*").order("period"),
-  ]);
-
-  if (deps.error) throw deps.error;
-  if (emps.error) throw emps.error;
-  if (comps.error) throw comps.error;
-  if (metrics.error) throw metrics.error;
-
-  const departments = deps.data as Department[];
-  const employees = emps.data as Employee[];
-  const compensation = comps.data as Compensation[];
-  const history = metrics.data as MetricsRow[];
-
+function toOverviewFull(parts: {
+  departments: Department[];
+  employees: Employee[];
+  compensation: Compensation[];
+  history: MetricsRow[];
+}) {
+  const { departments, employees, compensation, history } = parts;
   const compByEmp = new Map(compensation.map((c) => [c.employee_id, c]));
   const deptById = new Map(departments.map((d) => [d.id, d.name]));
 
@@ -93,6 +84,58 @@ export async function fetchOverview() {
   });
 
   return { departments, employees: employeesFull, history };
+}
+
+export async function fetchOverview() {
+  const overviewSource = String(import.meta.env.VITE_HR_OVERVIEW_SOURCE ?? "")
+    .trim()
+    .toLowerCase();
+
+  const demoMode =
+    String(import.meta.env.VITE_DEMO_MODE ?? "")
+      .trim()
+      .toLowerCase() === "true";
+
+  // If explicitly configured, always use S3 snapshot (recommended for "dummy data" deployments).
+  // This avoids any Supabase dependency for Team/Overview reads.
+  if (overviewSource === "s3") {
+    try {
+      const snap = await getHrOverviewFromS3();
+      return toOverviewFull({
+        departments: snap.departments,
+        employees: snap.employees,
+        compensation: snap.compensation,
+        history: snap.history,
+      });
+    } catch {
+      // If snapshot isn't available yet, fall back to locally generated demo data.
+      return toOverviewFull(demoOverviewParts());
+    }
+  }
+
+  // Demo mode = local dummy dataset (no Supabase calls).
+  if (demoMode) return toOverviewFull(demoOverviewParts());
+
+  const s3Fallback =
+    String(import.meta.env.VITE_HR_S3_FALLBACK ?? "")
+      .trim()
+      .toLowerCase() === "true";
+
+  try {
+    // Primary source: Supabase (normal mode)
+    const parts = await fetchOverviewPartsFromSupabase();
+    return toOverviewFull(parts);
+  } catch (err) {
+    if (!s3Fallback) throw err;
+    // Fallback: S3 snapshot (helps in deployments where Supabase is flaky/blocked)
+    const snap = await getHrOverviewFromS3();
+    return toOverviewFull({
+      departments: snap.departments,
+      employees: snap.employees,
+      compensation: snap.compensation,
+      history: snap.history,
+    });
+  }
 }
 
 export async function fetchFormulas(): Promise<Formula[]> {
