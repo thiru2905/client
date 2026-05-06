@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { getPersistedSession, persistSession } from "@/lib/notetaker-datastore.server";
+import { getNotetakerSessionsIndexFromS3, putNotetakerSessionsIndexToS3 } from "@/lib/notetaker-sessions-s3.server";
 
 const BotIdInput = z.object({ botId: z.string().min(1) });
 const CreateBotInput = z.object({
@@ -64,12 +65,46 @@ export type NotetakerTranscriptLine = {
 };
 
 export const listNotetakerSessions = createServerFn({ method: "GET" }).handler(async () => {
-  const data = await upstream("/api/sessions");
-  return data as {
-    sessions: NotetakerSession[];
-    hasRecallConfig: boolean;
-    hasGroqConfig: boolean;
-  };
+  const source = String(process.env.NOTETAKER_SESSIONS_SOURCE || "").trim().toLowerCase();
+
+  // S3-only mode (for deployments that don't want to depend on upstream availability)
+  if (source === "s3") {
+    const idx = await getNotetakerSessionsIndexFromS3();
+    return {
+      sessions: idx.sessions ?? [],
+      hasRecallConfig: true,
+      hasGroqConfig: true,
+    };
+  }
+
+  try {
+    const data = (await upstream("/api/sessions")) as {
+      sessions: NotetakerSession[];
+      hasRecallConfig: boolean;
+      hasGroqConfig: boolean;
+    };
+
+    // Best-effort: persist the sessions catalog to S3 so the UI can still render later.
+    try {
+      await putNotetakerSessionsIndexToS3({ sessions: data.sessions ?? [] });
+    } catch {
+      // ignore S3 failures for the live sessions call
+    }
+
+    return data;
+  } catch (e) {
+    // Fallback: if upstream fails, try the last persisted S3 snapshot.
+    try {
+      const idx = await getNotetakerSessionsIndexFromS3();
+      return {
+        sessions: idx.sessions ?? [],
+        hasRecallConfig: true,
+        hasGroqConfig: true,
+      };
+    } catch {
+      throw e;
+    }
+  }
 });
 
 export const getNotetakerSession = createServerFn({ method: "GET" })

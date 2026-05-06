@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/lib/auth";
 import { askMiniModuleAi } from "@/lib/mini-module-ai";
 import { finalizeAndPersistNotetakerSession } from "@/lib/notetaker-persistence-functions";
+import { syncNotetakerSessionsIndexToS3 } from "@/lib/notetaker-sessions-s3-functions";
 
 export const Route = createFileRoute("/alyson-notetaker/")({
   component: AlysonNotetakerPage,
@@ -41,6 +42,7 @@ function AlysonNotetakerPage() {
 
   const sessionsQ = useQuery({ queryKey: ["alyson-notetaker", "sessions"], queryFn: () => listNotetakerSessions() });
   const [picked, setPicked] = useState<string | null>(null);
+  const [sessionsSearch, setSessionsSearch] = useState("");
 
   useEffect(() => {
     if (!picked && sessionsQ.data?.sessions?.[0]?.botId) {
@@ -75,6 +77,15 @@ function AlysonNotetakerPage() {
 
   const sessions = sessionsQ.data?.sessions ?? [];
   const hasRecallConfig = sessionsQ.data?.hasRecallConfig ?? false;
+  const filteredSessions = useMemo(() => {
+    const q = sessionsSearch.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((s) => {
+      const title = String(s.title || "").toLowerCase();
+      const id = String(s.botId || "").toLowerCase();
+      return title.includes(q) || id.includes(q);
+    });
+  }, [sessions, sessionsSearch]);
 
   return (
     <div className="ops-dense">
@@ -113,12 +124,37 @@ function AlysonNotetakerPage() {
               }}
             />
             <div className="mt-4 border-t border-border pt-3">
-              <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-medium mb-2">Sessions</div>
-              {sessions.length === 0 ? (
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-medium">Sessions</div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await syncNotetakerSessionsIndexToS3({ data: {} });
+                      toast.success("Sessions persisted to S3");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Failed to persist sessions");
+                    }
+                  }}
+                  className="h-6 px-2 rounded-md border border-border bg-background text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                  title="Persist the current sessions list to S3"
+                >
+                  Persist list
+                </button>
+              </div>
+
+              <input
+                value={sessionsSearch}
+                onChange={(e) => setSessionsSearch(e.target.value)}
+                placeholder="Search sessions…"
+                className="w-full h-8 px-3 rounded-md border border-border bg-background text-[13px] mb-2"
+              />
+
+              {filteredSessions.length === 0 ? (
                 <EmptyState icon={Captions} title="No sessions yet" description="Create a bot to start capturing transcripts." />
               ) : (
-                <div className="space-y-1">
-                  {sessions.map((s) => (
+                <div className="max-h-[520px] overflow-y-auto pr-1 space-y-1">
+                  {filteredSessions.map((s) => (
                     <button
                       key={s.botId}
                       onClick={() => setPicked(s.botId)}
