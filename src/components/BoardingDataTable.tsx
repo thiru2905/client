@@ -224,9 +224,19 @@ export function BoardingDataTable({
                     <input
                       type="date"
                       value={toDateInputValue(value)}
-                      disabled={!canEdit}
-                      onChange={(e) => updateCell(rowId, c, e.target.value)}
-                      className="w-full bg-background border border-border rounded-md text-[12px] text-foreground disabled:opacity-60 h-7 px-2 min-w-[180px] cursor-pointer"
+                      // Don't disable: disabled inputs can't open the native calendar picker.
+                      // Instead, allow opening the picker and block writes if user can't edit.
+                      onChange={(e) => {
+                        if (!canEdit) {
+                          toast.error("Super Admin only");
+                          return;
+                        }
+                        updateCell(rowId, c, e.target.value);
+                      }}
+                      className={
+                        "w-full bg-background border border-border rounded-md text-[12px] text-foreground h-7 px-2 min-w-[180px] cursor-pointer " +
+                        (!canEdit ? "opacity-60" : "")
+                      }
                     />
                   );
                 }

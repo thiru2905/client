@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
+import { getPersistedSession, persistSession } from "@/lib/notetaker-datastore.server";
 
 const BotIdInput = z.object({ botId: z.string().min(1) });
 const CreateBotInput = z.object({
@@ -75,7 +76,7 @@ export const getNotetakerSession = createServerFn({ method: "GET" })
   .inputValidator((data: unknown) => BotIdInput.parse(data))
   .handler(async ({ data }) => {
     const res = await upstream(`/api/session/${encodeURIComponent(data.botId)}`);
-    return res as {
+    const typed = res as {
       session: NotetakerSession;
       lines: NotetakerTranscriptLine[];
       participantCount: number;
@@ -83,6 +84,50 @@ export const getNotetakerSession = createServerFn({ method: "GET" })
       hasRecallConfig: boolean;
       hasGroqConfig: boolean;
     };
+
+    // Write-on-finish persistence:
+    // If upstream marks the meeting as ended (or equivalent), persist transcript+notes once.
+    const st = String(typed.session?.status || "").toLowerCase();
+    const ended = ["ended", "completed", "disconnected", "left", "finished"].includes(st);
+    if (ended && typed.session?.botId) {
+      const existing = await getPersistedSession(typed.session.botId);
+      if (!existing?.finalizedAt) {
+        let notes: { notes: string; model?: string } | null = null;
+        try {
+          notes = (await upstream(`/api/session/${encodeURIComponent(data.botId)}/notes`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ prompt: "" }),
+          })) as any;
+        } catch {
+          // Notes generation can fail; transcript persistence should still work.
+        }
+        await persistSession({ session: typed.session, lines: typed.lines ?? [], notes });
+      }
+    }
+
+    return typed;
+  });
+
+export const finalizeNotetakerSession = createServerFn({ method: "POST" })
+  .inputValidator((data: unknown) => BotIdInput.parse(data))
+  .handler(async ({ data }) => {
+    const res = (await upstream(`/api/session/${encodeURIComponent(data.botId)}`)) as {
+      session: NotetakerSession;
+      lines: NotetakerTranscriptLine[];
+    };
+    let notes: { notes: string; model?: string } | null = null;
+    try {
+      notes = (await upstream(`/api/session/${encodeURIComponent(data.botId)}/notes`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: "" }),
+      })) as any;
+    } catch {
+      // ignore
+    }
+    const persisted = await persistSession({ session: res.session, lines: res.lines ?? [], notes });
+    return { persisted };
   });
 
 export const createNotetakerRecallBot = createServerFn({ method: "POST" })

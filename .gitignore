@@ -27,4 +27,8 @@ Thumbs.db
 # local uploads / artifacts (keep out of git)
 boarding.xlsx
 boardingdetails.pdf
+MeetingBotDatastore.md
+
+# local meeting bot datastore
+.alyson/
 
