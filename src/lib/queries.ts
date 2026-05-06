@@ -99,18 +99,13 @@ export async function fetchOverview() {
   // If explicitly configured, always use S3 snapshot (recommended for "dummy data" deployments).
   // This avoids any Supabase dependency for Team/Overview reads.
   if (overviewSource === "s3") {
-    try {
-      const snap = await getHrOverviewFromS3();
-      return toOverviewFull({
-        departments: snap.departments,
-        employees: snap.employees,
-        compensation: snap.compensation,
-        history: snap.history,
-      });
-    } catch {
-      // If snapshot isn't available yet, fall back to locally generated demo data.
-      return toOverviewFull(demoOverviewParts());
-    }
+    const snap = await getHrOverviewFromS3();
+    return toOverviewFull({
+      departments: snap.departments,
+      employees: snap.employees,
+      compensation: snap.compensation,
+      history: snap.history,
+    });
   }
 
   // Demo mode = local dummy dataset (no Supabase calls).
