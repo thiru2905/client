@@ -55,7 +55,7 @@ export async function listMeetingsFromS3({ start, end }: { start: string; end: s
   const notesBase = "alyson-notetaker/meetingnotes/";
   const transcriptBase = "alyson-notetaker/transcripts/";
 
-  // 1) List notes folders by CommonPrefixes
+  // 1) List meeting folders by CommonPrefixes (notes + transcripts)
   const notes = await client.send(
     new ListObjectsV2Command({
       Bucket: bucket,
@@ -64,10 +64,29 @@ export async function listMeetingsFromS3({ start, end }: { start: string; end: s
     }),
   );
 
-  const prefixes = (notes.CommonPrefixes ?? [])
-    .map((p) => String(p.Prefix || ""))
-    .filter(Boolean)
-    .map((p) => p.replace(notesBase, "").replace(/\/$/, "")); // just "<prefix>"
+  const transcripts = await client.send(
+    new ListObjectsV2Command({
+      Bucket: bucket,
+      Prefix: transcriptBase,
+      Delimiter: "/",
+    }),
+  );
+
+  const notesPrefixes = new Set(
+    (notes.CommonPrefixes ?? [])
+      .map((p) => String(p.Prefix || ""))
+      .filter(Boolean)
+      .map((p) => p.replace(notesBase, "").replace(/\/$/, "")),
+  );
+
+  const transcriptPrefixes = new Set(
+    (transcripts.CommonPrefixes ?? [])
+      .map((p) => String(p.Prefix || ""))
+      .filter(Boolean)
+      .map((p) => p.replace(transcriptBase, "").replace(/\/$/, "")),
+  );
+
+  const prefixes = Array.from(new Set([...notesPrefixes, ...transcriptPrefixes]));
 
   // 2) Build meeting rows, filter by day in [start, end]
   const rows: S3Meeting[] = [];
@@ -80,8 +99,8 @@ export async function listMeetingsFromS3({ start, end }: { start: string; end: s
       day,
       title: parsed.title || "Meeting",
       startedAt: parsed.startedAt,
-      notesKey: `${notesBase}${p}/notes.md`,
-      transcriptKey: `${transcriptBase}${p}/transcript.txt`,
+      notesKey: notesPrefixes.has(p) ? `${notesBase}${p}/notes.md` : null,
+      transcriptKey: transcriptPrefixes.has(p) ? `${transcriptBase}${p}/transcript.txt` : null,
     });
   }
 

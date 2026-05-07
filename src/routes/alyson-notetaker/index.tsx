@@ -17,6 +17,7 @@ import { askMiniModuleAi } from "@/lib/mini-module-ai";
 import { finalizeAndPersistNotetakerSession } from "@/lib/notetaker-persistence-functions";
 import { syncNotetakerSessionsIndexToS3 } from "@/lib/notetaker-sessions-s3-functions";
 import { deleteNotetakerSessionFromS3 } from "@/lib/notetaker-delete-functions";
+import { generateSmartMeetingNotes } from "@/lib/notetaker-smart-notes";
 
 export const Route = createFileRoute("/alyson-notetaker/")({
   component: AlysonNotetakerPage,
@@ -457,7 +458,21 @@ function SessionPanel({ botId }: { botId: string | null }) {
   }, [botId, base]);
 
   const notesM = useMutation({
-    mutationFn: async (prompt?: string) => generateNotetakerNotes({ data: { botId: botId!, prompt } }),
+    mutationFn: async (prompt?: string) => {
+      // For very large transcripts, avoid upstream token exhaustion by chunking locally.
+      if (plainTranscript.length > 22_000) {
+        return await generateSmartMeetingNotes({ data: { title: session?.title || "Meeting", transcriptText: plainTranscript } });
+      }
+      try {
+        const res = await generateNotetakerNotes({ data: { botId: botId!, prompt } });
+        if (!String(res?.notes || "").trim()) {
+          return await generateSmartMeetingNotes({ data: { title: session?.title || "Meeting", transcriptText: plainTranscript } });
+        }
+        return res;
+      } catch {
+        return await generateSmartMeetingNotes({ data: { title: session?.title || "Meeting", transcriptText: plainTranscript } });
+      }
+    },
     onSuccess: (res) => {
       setNotes(res.notes);
       setNotesModel(res.model);
