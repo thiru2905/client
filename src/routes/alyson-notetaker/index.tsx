@@ -420,9 +420,14 @@ function SessionPanel({ botId }: { botId: string | null }) {
       .filter(Boolean)
       .join("\n");
 
-    const transcript = plainTranscript || "(no transcript lines)";
-    const notesBlock = plainNotes ? `\n\nMeeting notes (generated):\n${plainNotes}\n` : "\n\nMeeting notes (generated):\n(none)\n";
-    return (header + "\n" + transcript + notesBlock).slice(0, 38_000);
+    // Keep context bounded so chat doesn't fail on longer meetings.
+    const transcriptLines = (plainTranscript || "(no transcript lines)").split("\n").filter(Boolean);
+    const transcriptTail = transcriptLines.slice(-220).join("\n"); // last N lines is usually enough
+    const notesTrimmed = plainNotes ? plainNotes.slice(0, 8000) : "";
+    const notesBlock = notesTrimmed
+      ? `\n\nMeeting notes (generated):\n${notesTrimmed}\n`
+      : "\n\nMeeting notes (generated):\n(none)\n";
+    return (header + "\n" + transcriptTail + notesBlock).slice(0, 14_000);
   }, [session, plainTranscript, plainNotes]);
 
   useEffect(() => {
@@ -492,7 +497,10 @@ function SessionPanel({ botId }: { botId: string | null }) {
     setChatInput("");
     setChatLoading(true);
     try {
-      const history = next.slice(0, -1).slice(-20);
+      const history = next
+        .slice(0, -1)
+        .slice(-10)
+        .map((m) => ({ ...m, content: String(m.content || "").slice(0, 800) }));
       const res = await askMiniModuleAi({
         data: {
           pagePath: "/alyson-notetaker",
@@ -655,7 +663,30 @@ function SessionPanel({ botId }: { botId: string | null }) {
       <div className="mt-4 border border-border rounded-lg overflow-hidden">
         <div className="px-3 py-2 border-b border-border bg-muted/30 flex items-center justify-between gap-2">
           <div className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-medium">Chat about this meeting</div>
-          <div className="text-[11px] text-muted-foreground truncate">Uses transcript + notes</div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={async () => {
+                const text = chatMsgs
+                  .map((m) => {
+                    const role = m.role === "user" ? "User" : "Alyson";
+                    const body = String(m.content || "").trim();
+                    return body ? `${role}: ${body}` : "";
+                  })
+                  .filter(Boolean)
+                  .join("\n\n");
+                if (!text.trim()) return;
+                await navigator.clipboard.writeText(text);
+                toast.success("Chat copied to clipboard");
+              }}
+              className="h-6 w-6 grid place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted/40"
+              title="Copy chat"
+              aria-label="Copy chat"
+            >
+              <Copy className="h-3.5 w-3.5" />
+            </button>
+            <div className="text-[11px] text-muted-foreground truncate">Uses transcript + notes</div>
+          </div>
         </div>
         <div className="p-3">
           <div className="max-h-[260px] overflow-y-auto space-y-2">

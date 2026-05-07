@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader, TableScroll, EmptyState } from "@/components/AppShell";
 import { PageSkeleton } from "@/components/Skeleton";
@@ -69,6 +69,27 @@ function TimeDoctorEmployeePage() {
   });
 
   const data = (q.data ?? null) as TimeDoctorUserDetail | null;
+  const user = data?.user ?? { id: userId, name: "Employee", email: "", title: "" };
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const top = data?.apps?.top ?? [];
+    (window as any).__ALYSON_MINI_CONTEXT__ = {
+      module: "time-doctor-user-detail",
+      tab,
+      range: { start, end },
+      user,
+      apps_websites_top: top.map((t) => ({
+        name: t.name,
+        category: t.category,
+        hours: Number(((t.seconds ?? 0) / 3600).toFixed(2)),
+      })),
+    };
+    return () => {
+      const cur = (window as any).__ALYSON_MINI_CONTEXT__;
+      if (cur?.module === "time-doctor-user-detail") (window as any).__ALYSON_MINI_CONTEXT__ = undefined;
+    };
+  }, [data, tab, start, end, userId]);
 
   const exportCsv = () => {
     if (!data) return toast.error("Nothing to export yet");
@@ -98,8 +119,6 @@ function TimeDoctorEmployeePage() {
     }
     toast.error("Nothing to export on this tab yet");
   };
-
-  const user = data?.user ?? { id: userId, name: "Employee", email: "", title: "" };
 
   return (
     <div className="ops-dense">

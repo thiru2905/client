@@ -283,20 +283,70 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 }
 
 function TopBar({ onAi, onMenu, onSearch }: { onAi: () => void; onMenu: () => void; onSearch: () => void }) {
+  const { palette, setPalette } = useTheme();
+  const [themeOpen, setThemeOpen] = useState(false);
   return (
     <div className="h-12 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-20 flex items-center px-3 md:px-5 gap-2 md:gap-3">
       <button onClick={onMenu} className="md:hidden h-8 w-8 grid place-items-center rounded-md hover:bg-muted text-muted-foreground" aria-label="Open menu">
         <Menu className="h-4 w-4" />
       </button>
-      <button onClick={onSearch} className="flex-1 max-w-md relative h-8 pl-8 pr-3 rounded-md border border-border bg-muted/40 text-[13px] text-left text-muted-foreground hover:bg-muted/60">
+      <button
+        onClick={onSearch}
+        className="w-full max-w-md relative h-8 pl-8 pr-3 rounded-md border border-border bg-muted/40 text-[13px] text-left text-muted-foreground hover:bg-muted/60"
+      >
         <Search className="h-3.5 w-3.5 absolute left-2.5 top-1/2 -translate-y-1/2" />
         Jump to…
         <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded border border-border bg-background">⌘K</kbd>
       </button>
-      <NotificationsPopover />
-      <button onClick={onAi} className="h-8 px-2.5 md:px-3 rounded-md bg-foreground text-background text-xs font-medium flex items-center gap-1.5 hover:opacity-90">
-        <Bot className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Ask Alyson</span>
-      </button>
+      <div className="ml-auto flex items-center">
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setThemeOpen((o) => !o)}
+            className="h-8 w-8 grid place-items-center rounded-md hover:bg-muted text-muted-foreground hover:text-foreground"
+            aria-label="Theme"
+            title="Theme"
+          >
+            <Sparkles className="h-4 w-4" />
+          </button>
+          {themeOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setThemeOpen(false)} aria-hidden />
+              <div className="absolute right-0 mt-2 z-40 w-44 rounded-lg border border-border bg-paper shadow-xl overflow-hidden">
+                <div className="px-3 py-2 text-[10px] uppercase tracking-[0.12em] text-muted-foreground font-medium border-b border-border">
+                  Theme
+                </div>
+                {(
+                  [
+                    ["default", "Default"],
+                    ["sapphire", "Sapphire"],
+                    ["emerald", "Emerald"],
+                    ["rose", "Rose"],
+                    ["amber", "Amber"],
+                  ] as const
+                ).map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => {
+                      setPalette(id);
+                      setThemeOpen(false);
+                    }}
+                    className={
+                      "w-full text-left px-3 py-2 text-[12.5px] hover:bg-muted/40 flex items-center justify-between " +
+                      (palette === id ? "text-foreground" : "text-muted-foreground")
+                    }
+                  >
+                    <span>{label}</span>
+                    {palette === id ? <span className="text-[11px] text-muted-foreground">Selected</span> : null}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+        <NotificationsPopover />
+      </div>
     </div>
   );
 }
@@ -734,6 +784,54 @@ function MiniModuleAiFab({
           });
           setLoading(false);
           return;
+        }
+      }
+
+      // Deterministic answers for Time Doctor user detail (Apps & Websites tab).
+      if (String(pagePath).startsWith("/time-dashboard/") && liveCtx?.module === "time-doctor-user-detail") {
+        const tab = String(liveCtx?.tab || "");
+        const userName = String(liveCtx?.user?.name || "this user");
+        const top = Array.isArray(liveCtx?.apps_websites_top) ? liveCtx.apps_websites_top : [];
+
+        if (tab === "apps") {
+          const wantsMostUsedWebsites =
+            /(most\s+used|top)\s+(websites|website|sites|site)/i.test(q) ||
+            (/\bwebsites?\b/i.test(q) && /\bmost\b/i.test(q));
+          const wantsNonProductive =
+            /(non\s*productive|not\s*productive|distract|distracting)/i.test(q) &&
+            /(apps?|websites?|sites?)/i.test(q);
+
+          if (wantsMostUsedWebsites) {
+            const websites = top.filter((t: any) => /web/i.test(String(t?.category || "")));
+            const lines = websites
+              .slice(0, 12)
+              .map((w: any) => `${String(w.name)} — ${Number(w.hours ?? 0).toFixed(2)}h`);
+            const out = lines.length ? lines.join("\n") : "No website usage rows are shown on this screen.";
+            setMessages((prev) => {
+              const copy = [...prev];
+              copy[copy.length - 1] = { role: "assistant", content: out };
+              return copy;
+            });
+            setLoading(false);
+            return;
+          }
+
+          if (wantsNonProductive) {
+            const nonProd = top.filter((t: any) => /distract/i.test(String(t?.category || "")));
+            const lines = nonProd
+              .slice(0, 20)
+              .map((t: any) => `${String(t.name)} — ${Number(t.hours ?? 0).toFixed(2)}h`);
+            const out = lines.length
+              ? `Not productive apps/websites shown for ${userName}:\n${lines.map((l: string) => `- ${l}`).join("\n")}`
+              : `No "distracting" rows are shown on this screen for ${userName}.`;
+            setMessages((prev) => {
+              const copy = [...prev];
+              copy[copy.length - 1] = { role: "assistant", content: out };
+              return copy;
+            });
+            setLoading(false);
+            return;
+          }
         }
       }
 
