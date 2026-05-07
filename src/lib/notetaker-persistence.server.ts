@@ -100,6 +100,7 @@ export async function persistMeetingToS3({
   const prefix = buildS3Prefix(session);
   const transcriptKey = `alyson-notetaker/transcripts/${prefix}/transcript.txt`;
   const notesKey = `alyson-notetaker/meetingnotes/${prefix}/notes.md`;
+  const botIndexKey = `alyson-notetaker/bot-index/${encodeURIComponent(session.botId)}.json`;
 
   const endedAt = new Date().toISOString();
   const transcript = composeTranscript(lines);
@@ -134,6 +135,28 @@ export async function persistMeetingToS3({
       }),
     );
   }
+
+  // 2) Write a tiny index file for fast deletes by botId (avoid listing+head scanning).
+  await s3().send(
+    new PutObjectCommand({
+      Bucket: bucket,
+      Key: botIndexKey,
+      Body: JSON.stringify(
+        {
+          version: 1,
+          botId: session.botId,
+          prefix,
+          transcriptKey,
+          notesKey: notes?.notesMd ? notesKey : null,
+          finalizedAt: endedAt,
+        },
+        null,
+        2,
+      ),
+      ContentType: "application/json; charset=utf-8",
+      Metadata: { kind: "alyson-notetaker-bot-index", botid: String(session.botId) },
+    }),
+  );
 
   return {
     botId: session.botId,
