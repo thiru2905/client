@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppShell";
 import { CalendarDays, Captions, Copy } from "lucide-react";
@@ -81,6 +81,23 @@ function CalendarPage() {
 
   const pickedMeetings = picked ? byDay.get(picked) ?? [] : [];
   const total = meetings.length;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    (window as any).__ALYSON_MINI_CONTEXT__ = {
+      module: "notetaker-calendar",
+      range,
+      monthLabel: monthLabel(month),
+      totalMeetingsInMonth: total,
+      pickedDay: picked,
+      meetingsShown: (picked ? pickedMeetings : meetings).map((m) => ({
+        title: m.title,
+        day: m.day,
+        startedAt: m.startedAt,
+        prefix: m.prefix,
+      })),
+    };
+  }, [month, range, total, picked, pickedMeetings, meetings]);
 
   const notesQ = useQuery({
     queryKey: ["notetaker-s3-doc", openKind, openKey],

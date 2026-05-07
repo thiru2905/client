@@ -454,12 +454,82 @@ function MiniModuleAiFab({
       }
 
       const liveCtx = typeof window !== "undefined" ? (window as any).__ALYSON_MINI_CONTEXT__ : null;
-      const contextText = liveCtx ? JSON.stringify(liveCtx, null, 2) : undefined;
+      const contextText = (() => {
+        if (!liveCtx) return undefined;
+        const raw = JSON.stringify(liveCtx, null, 2);
+        // Avoid oversized requests that can make the model fail on long conversations.
+        return raw.length > 12000 ? raw.slice(0, 12000) + "\n…(truncated)\n" : raw;
+      })();
 
       // Deterministic answers for dashboard-style questions (avoid AI gibberish).
       if (String(pagePath).startsWith("/time-dashboard") && liveCtx?.module === "time-dashboard") {
         const allToday = Array.isArray(liveCtx?.employees_all_today) ? liveCtx.employees_all_today : [];
         const onlyNames = /\bonly\s+names?\b/i.test(q) || /\bno\s+fluff\b/i.test(q);
+        const wantsPersonHours =
+          /(hours|hrs|working\s*hours|daily\s*hours|today)/i.test(q) &&
+          /(of|for|about)\s+/i.test(q) &&
+          !/(how\s+many|number\s+of|count|list|which)/i.test(q);
+
+        const normalize = (s: string) =>
+          String(s || "")
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const maybeName = (() => {
+          const m =
+            q.match(/\b(?:of|for|about)\s+([a-z][a-z0-9\s.'-]{2,})$/i) ??
+            q.match(/\b([a-z][a-z0-9\s.'-]{2,})\s*(?:hours|hrs)\b/i);
+          return m ? String(m[1]).trim() : "";
+        })();
+
+        if (wantsPersonHours && maybeName) {
+          const target = normalize(maybeName);
+          const exact = allToday.find((e: any) => normalize(e?.name) === target) ?? null;
+          const partial =
+            exact ??
+            allToday.find((e: any) => normalize(e?.name).includes(target) || target.includes(normalize(e?.name))) ??
+            null;
+
+          if (partial) {
+            const daily = typeof partial.daily_hours === "number" ? partial.daily_hours : null;
+            const monthly = typeof partial.monthly_hours === "number" ? partial.monthly_hours : null;
+            const dailyTxt = daily != null ? `${daily.toFixed(2)}h today` : "today hours unavailable";
+            const monthlyTxt = monthly != null ? `${monthly.toFixed(2)}h this month` : "monthly hours unavailable";
+
+            setMessages((prev) => {
+              const copy = [...prev];
+              copy[copy.length - 1] = {
+                role: "assistant",
+                content: `${partial.name}: ${dailyTxt} (${monthlyTxt}).`,
+              };
+              return copy;
+            });
+            setLoading(false);
+            return;
+          }
+
+          // Helpful fallback: show a few close candidates.
+          const candidates = allToday
+            .map((e: any) => String(e?.name || "").trim())
+            .filter(Boolean)
+            .filter((n: string) => normalize(n).includes(target.split(" ")[0] || target))
+            .slice(0, 8);
+
+          setMessages((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = {
+              role: "assistant",
+              content: candidates.length
+                ? `I can’t find "${maybeName}" in the current table. Did you mean:\n- ${candidates.join("\n- ")}`
+                : `I can’t find "${maybeName}" in the current table.`,
+            };
+            return copy;
+          });
+          setLoading(false);
+          return;
+        }
 
         const betweenMatch = q.match(/\bbetween\s*(\d+(?:\.\d+)?)\s*(?:and|to)\s*(\d+(?:\.\d+)?)/i);
         const betweenA = betweenMatch ? Number.parseFloat(betweenMatch[1]) : null;
@@ -631,9 +701,45 @@ function MiniModuleAiFab({
         }
       }
 
+      // Deterministic answers for Meeting Calendar (visible on-screen data).
+      if (String(pagePath).startsWith("/alyson-notetaker/calendar") && liveCtx?.module === "notetaker-calendar") {
+        const meetingsShown = Array.isArray(liveCtx?.meetingsShown) ? liveCtx.meetingsShown : [];
+        const pickedDay = liveCtx?.pickedDay ? String(liveCtx.pickedDay) : null;
+        const wantsCount =
+          /\bhow\s+many\b|\bnumber\s+of\b|\bcount\b/i.test(q) &&
+          /\bmeeting(s)?\b/i.test(q);
+        const wantsNames =
+          /\bname(s)?\b|\blist\b|\bwhich\b/i.test(q) &&
+          /\bmeeting(s)?\b/i.test(q);
+
+        if (wantsCount || wantsNames) {
+          const count = meetingsShown.length;
+          const titles = meetingsShown
+            .map((m: any) => String(m?.title || "").trim())
+            .filter(Boolean)
+            .slice(0, 80);
+
+          const header = pickedDay
+            ? `Meetings shown for ${pickedDay}: ${count}`
+            : `Meetings shown (current month view): ${count}`;
+          const body = titles.length ? `\n\n${titles.map((t: string) => `- ${t}`).join("\n")}` : "";
+
+          setMessages((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = {
+              role: "assistant",
+              content: wantsNames ? `${header}${body}` : header,
+            };
+            return copy;
+          });
+          setLoading(false);
+          return;
+        }
+      }
+
       const history = messages
         .filter((m) => m && (m.role === "user" || m.role === "assistant"))
-        .slice(-8)
+        .slice(-6)
         .map((m: any) => ({ role: m.role, content: String(m.content ?? "") }));
       const res = await askMiniModuleAi({ data: { pagePath, question: q, history, contextText } });
       setMessages((prev) => {
