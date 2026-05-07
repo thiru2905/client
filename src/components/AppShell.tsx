@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Users, DollarSign, TrendingUp, Gift, PieChart, Calendar,
   Clock, FileText, GitBranch, BarChart3, Shield, HelpCircle, Sparkles,
   Moon, Sun, ChevronsLeft, ChevronsRight, LogOut, Search, Bot, Menu, X, Send,
-  Captions, UserPlus, CalendarDays,
+  Captions, UserPlus, CalendarDays, Paintbrush,
 } from "lucide-react";
 import { useAuth, ROLE_LABEL, type AppRole } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
@@ -50,7 +50,7 @@ const ROLES: AppRole[] = ["super_admin", "ceo", "finance", "hr", "manager", "emp
 export function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { hasAnyRole, primaryRole, demoRole, setDemoRole, signOut, user, tryUnlockSuperAdmin, superAdminUnlocked } = useAuth();
-  const { theme, toggle } = useTheme();
+  const { theme, toggle, palette, setPalette } = useTheme();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
@@ -266,7 +266,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <main className="flex-1 min-w-0 flex flex-col">
-        <TopBar onAi={() => setAiOpen((o) => !o)} onMenu={() => setMobileOpen(true)} onSearch={() => setPaletteOpen(true)} />
+        <TopBar
+          onAi={() => setAiOpen((o) => !o)}
+          onMenu={() => setMobileOpen(true)}
+          onSearch={() => setPaletteOpen(true)}
+          themePalette={palette}
+          onThemePalette={setPalette}
+        />
         <div className="flex-1 min-h-0">{children}</div>
       </main>
 
@@ -282,8 +288,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function TopBar({ onAi, onMenu, onSearch }: { onAi: () => void; onMenu: () => void; onSearch: () => void }) {
-  const { palette, setPalette } = useTheme();
+function TopBar({
+  onAi,
+  onMenu,
+  onSearch,
+  themePalette,
+  onThemePalette,
+}: {
+  onAi: () => void;
+  onMenu: () => void;
+  onSearch: () => void;
+  themePalette: string;
+  onThemePalette: (p: any) => void;
+}) {
   const [themeOpen, setThemeOpen] = useState(false);
   return (
     <div className="h-12 border-b border-border bg-background/80 backdrop-blur-sm sticky top-0 z-20 flex items-center px-3 md:px-5 gap-2 md:gap-3">
@@ -307,7 +324,7 @@ function TopBar({ onAi, onMenu, onSearch }: { onAi: () => void; onMenu: () => vo
             aria-label="Theme"
             title="Theme"
           >
-            <Sparkles className="h-4 w-4" />
+            <Paintbrush className="h-4 w-4" />
           </button>
           {themeOpen && (
             <>
@@ -329,16 +346,16 @@ function TopBar({ onAi, onMenu, onSearch }: { onAi: () => void; onMenu: () => vo
                     key={id}
                     type="button"
                     onClick={() => {
-                      setPalette(id);
+                      onThemePalette(id);
                       setThemeOpen(false);
                     }}
                     className={
                       "w-full text-left px-3 py-2 text-[12.5px] hover:bg-muted/40 flex items-center justify-between " +
-                      (palette === id ? "text-foreground" : "text-muted-foreground")
+                      (themePalette === id ? "text-foreground" : "text-muted-foreground")
                     }
                   >
                     <span>{label}</span>
-                    {palette === id ? <span className="text-[11px] text-muted-foreground">Selected</span> : null}
+                    {themePalette === id ? <span className="text-[11px] text-muted-foreground">Selected</span> : null}
                   </button>
                 ))}
               </div>
