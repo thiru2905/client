@@ -23,7 +23,24 @@ export const Route = createFileRoute("/alyson-notetaker/")({
 
 function AlysonNotetakerPage() {
   const auth = useAuth();
-  if (!auth.hasRole("super_admin")) {
+  const isSuperAdmin = auth.hasRole("super_admin");
+
+  const sessionsQ = useQuery({
+    queryKey: ["alyson-notetaker", "sessions"],
+    queryFn: () => listNotetakerSessions(),
+    enabled: isSuperAdmin,
+  });
+  const [picked, setPicked] = useState<string | null>(null);
+  const [sessionsSearch, setSessionsSearch] = useState("");
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    if (!picked && sessionsQ.data?.sessions?.[0]?.botId) {
+      setPicked(sessionsQ.data.sessions[0].botId);
+    }
+  }, [isSuperAdmin, picked, sessionsQ.data]);
+
+  if (!isSuperAdmin) {
     return (
       <div className="ops-dense">
         <PageHeader eyebrow="Operations" title="Alyson Notetaker" description="Super admin only." dense />
@@ -39,16 +56,6 @@ function AlysonNotetakerPage() {
       </div>
     );
   }
-
-  const sessionsQ = useQuery({ queryKey: ["alyson-notetaker", "sessions"], queryFn: () => listNotetakerSessions() });
-  const [picked, setPicked] = useState<string | null>(null);
-  const [sessionsSearch, setSessionsSearch] = useState("");
-
-  useEffect(() => {
-    if (!picked && sessionsQ.data?.sessions?.[0]?.botId) {
-      setPicked(sessionsQ.data.sessions[0].botId);
-    }
-  }, [picked, sessionsQ.data]);
 
   if (sessionsQ.isLoading) return <PageSkeleton />;
 

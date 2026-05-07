@@ -32,29 +32,7 @@ function isIsoDate(v: unknown): v is string {
 
 function TimeDashboardPage() {
   const auth = useAuth();
-  if (!auth.hasRole("super_admin")) {
-    return (
-      <div className="ops-dense">
-        <PageHeader
-          eyebrow="People"
-          title="Time Dashboard"
-          description="Super admin only."
-          dense
-        />
-        <div className="px-5 md:px-8 py-6">
-          <div className="surface-card p-8 text-center">
-            <div className="mx-auto h-10 w-10 rounded-full bg-muted grid place-items-center text-muted-foreground mb-3">
-              <Clock className="h-5 w-5" />
-            </div>
-            <div className="font-medium text-[15px]">Access denied</div>
-            <div className="text-[13px] text-muted-foreground mt-1">
-              This feature is restricted to Super Admins.
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const isSuperAdmin = auth.hasRole("super_admin");
 
   const [q, setQ] = useState("");
   const navigate = useNavigate();
@@ -75,7 +53,25 @@ function TimeDashboardPage() {
   const table = useQuery({
     queryKey: ["time-doctor-employees-table", day],
     queryFn: () => fetchTimeDoctorEmployeesTable({ data: { day } }),
+    enabled: isSuperAdmin,
   });
+
+  if (!isSuperAdmin) {
+    return (
+      <div className="ops-dense">
+        <PageHeader eyebrow="People" title="Time Dashboard" description="Super admin only." dense />
+        <div className="px-5 md:px-8 py-6">
+          <div className="surface-card p-8 text-center">
+            <div className="mx-auto h-10 w-10 rounded-full bg-muted grid place-items-center text-muted-foreground mb-3">
+              <Clock className="h-5 w-5" />
+            </div>
+            <div className="font-medium text-[15px]">Access denied</div>
+            <div className="text-[13px] text-muted-foreground mt-1">This feature is restricted to Super Admins.</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (table.isLoading) return <PageSkeleton />;
   if (table.error) {
@@ -156,6 +152,7 @@ function TimeDashboardPage() {
 
   // Expose live dashboard context for the mini module AI (client-side).
   useEffect(() => {
+    if (!isSuperAdmin) return;
     if (typeof window === "undefined") return;
     const all = employeeRollups.map((e) => ({
       employee_id: e.employee_id,
@@ -192,7 +189,7 @@ function TimeDashboardPage() {
       const cur = (window as any).__ALYSON_MINI_CONTEXT__;
       if (cur?.module === "time-dashboard") (window as any).__ALYSON_MINI_CONTEXT__ = undefined;
     };
-  }, [employeeRollups, totalHours, day, data?.company?.name]);
+  }, [isSuperAdmin, employeeRollups, totalHours, day, data?.company?.name]);
 
   const exportCsv = () => {
     if (!employeeRollups.length) return toast.error("No employees to export");
