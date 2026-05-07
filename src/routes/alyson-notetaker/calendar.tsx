@@ -2,7 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/AppShell";
-import { CalendarDays, Captions } from "lucide-react";
+import { CalendarDays, Captions, Copy } from "lucide-react";
 import { listMeetingsFromS3Range, getMeetingNotesMdFromS3, getMeetingTranscriptTextFromS3 } from "@/lib/notetaker-s3-calendar-functions";
 import { toast } from "sonner";
 
@@ -226,6 +226,24 @@ function CalendarPage() {
             <div className="px-4 py-3 border-b border-border flex items-center gap-2">
               <div className="font-medium text-[13px]">{openKind === "notes" ? "Meeting notes" : "Transcript"}</div>
               <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={async () => {
+                    const text = notesQ.data?.text ?? "";
+                    if (!text.trim()) return toast.error("Nothing to copy");
+                    try {
+                      await navigator.clipboard.writeText(text);
+                      toast.success(openKind === "notes" ? "Notes copied to clipboard" : "Transcript copied to clipboard");
+                    } catch (e) {
+                      toast.error(e instanceof Error ? e.message : "Failed to copy");
+                    }
+                  }}
+                  disabled={notesQ.isLoading || notesQ.isError || !notesQ.data?.text?.trim()}
+                  className="h-8 w-8 grid place-items-center rounded-md border border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted/40 disabled:opacity-50"
+                  title="Copy"
+                  aria-label="Copy"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
                 <button
                   onClick={() => setOpenKey(null)}
                   className="h-8 px-3 rounded-md border border-border text-xs hover:bg-muted"
