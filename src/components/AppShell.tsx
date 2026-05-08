@@ -2,7 +2,7 @@ import { Link, useLocation } from "@tanstack/react-router";
 import { useEffect, useState, useRef } from "react";
 import {
   LayoutDashboard, Users, DollarSign, TrendingUp, Gift, PieChart, Calendar,
-  Clock, FileText, GitBranch, BarChart3, Shield, HelpCircle, Sparkles,
+  Clock, FileText, GitBranch, BarChart3, Shield, HelpCircle,
   Moon, Sun, ChevronsLeft, ChevronsRight, LogOut, Search, Bot, Menu, X, Send,
   Captions, UserPlus, CalendarDays, Paintbrush,
 } from "lucide-react";
@@ -158,16 +158,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="px-3 pt-4 pb-3 border-b border-sidebar-border flex items-center gap-2.5">
           <Link
             to="/"
-            className="flex items-center gap-2.5 min-w-0 flex-1 rounded-md hover:bg-sidebar-accent/60 transition-colors px-1 py-1 -mx-1"
+            className="flex items-center gap-2.5 min-w-0 flex-1 rounded-md hover:bg-sidebar-accent/60 transition-colors px-1.5 py-1 -mx-1.5"
             aria-label="Go to landing page"
           >
-            <div className="h-8 w-8 rounded-lg bg-foreground text-background grid place-items-center shrink-0">
-              <Sparkles className="h-4 w-4" />
-            </div>
             {(!collapsed || mobileOpen) && (
               <div className="leading-tight min-w-0">
                 <div className="font-display text-[16px] font-semibold tracking-tight truncate">Alyson HR</div>
                 <div className="text-[10.5px] text-muted-foreground -mt-0.5">Acme, Inc.</div>
+              </div>
+            )}
+            {(collapsed && !mobileOpen) && (
+              <div className="h-8 w-8 rounded-lg border border-sidebar-border bg-sidebar-accent/40 grid place-items-center shrink-0">
+                <span className="font-display text-[14px] font-semibold tracking-tight">A</span>
               </div>
             )}
           </Link>

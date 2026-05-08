@@ -16,8 +16,9 @@ export function KpiCard({
   trend?: number[];
 }) {
   const positive = (change ?? 0) >= 0;
+  const showSparkline = Boolean(trend && trend.length > 1);
   return (
-    <div className="surface-card p-5 transition-all hover:shadow-[var(--shadow-lift)] hover:-translate-y-0.5">
+    <div className="surface-card p-5 transition-all hover:shadow-[var(--shadow-lift)] hover:-translate-y-0.5 flex flex-col min-h-[156px]">
       <div className="flex items-start justify-between gap-3">
         <div className="text-[12.5px] text-muted-foreground font-medium">{label}</div>
         {Icon && (
@@ -26,7 +27,9 @@ export function KpiCard({
           </div>
         )}
       </div>
-      <div className="mt-3 font-display text-[28px] leading-none tracking-tight text-foreground">{value}</div>
+      <div className="mt-3 font-display text-[24px] md:text-[26px] leading-none tracking-tight text-foreground tabular-nums break-words">
+        {value}
+      </div>
       <div className="mt-3 flex items-center justify-between gap-2">
         {typeof change === "number" ? (
           <div
@@ -43,9 +46,9 @@ export function KpiCard({
         ) : <span />}
         {hint && <div className="text-[11.5px] text-muted-foreground">{hint}</div>}
       </div>
-      {trend && trend.length > 1 && (
-        <Sparkline values={trend} positive={positive} className="mt-3" />
-      )}
+      <div className="mt-3 h-8">
+        {showSparkline ? <Sparkline values={trend!} positive={positive} /> : <div className="h-8 opacity-0" />}
+      </div>
     </div>
   );
 }
