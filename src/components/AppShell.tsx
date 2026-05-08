@@ -895,7 +895,7 @@ function MiniModuleAiFab({
         onClick={onToggle}
         aria-label="Open Alyson Mini"
         title="Alyson Mini"
-        className="fixed z-40 bottom-4 right-4 h-12 w-12 bg-transparent border-0 p-0"
+        className="fixed z-[70] bottom-4 right-4 h-12 w-12 bg-transparent border-0 p-0"
       >
         <span className="sr-only">Alyson Mini</span>
         <img
@@ -913,8 +913,8 @@ function MiniModuleAiFab({
 
       {open && (
         <>
-          <div className="fixed inset-0 z-30 bg-black/25" onClick={onClose} aria-hidden />
-          <div className="fixed z-40 bottom-20 right-4 w-[360px] max-w-[calc(100vw-32px)] rounded-xl border border-border bg-paper shadow-xl overflow-hidden">
+          <div className="fixed inset-0 z-[65] bg-black/25" onClick={onClose} aria-hidden />
+          <div className="fixed z-[70] bottom-20 right-4 w-[360px] max-w-[calc(100vw-32px)] rounded-xl border border-border bg-paper shadow-xl overflow-hidden">
             <div className="h-10 px-3 border-b border-border flex items-center gap-2">
               <img src={alysonFaceSrc} alt="" className="h-5 w-5 rounded-full" draggable={false} />
               <div className="text-[13px] font-medium">Alyson Mini</div>
