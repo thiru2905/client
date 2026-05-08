@@ -26,4 +26,13 @@ export default defineConfig({
     viteReact(),
     tailwindcss(),
   ],
+  define: {
+    __BUILD_SHA__: JSON.stringify(
+      process.env.VERCEL_GIT_COMMIT_SHA ||
+        process.env.GITHUB_SHA ||
+        process.env.CF_PAGES_COMMIT_SHA ||
+        "",
+    ),
+    __BUILD_ENV__: JSON.stringify(process.env.VERCEL_ENV || process.env.NODE_ENV || ""),
+  },
 });

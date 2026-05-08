@@ -14,6 +14,9 @@ import { streamAlyson, type ChatMsg } from "@/lib/ai-client";
 import { askMiniModuleAi } from "@/lib/mini-module-ai";
 import { toast } from "sonner";
 
+declare const __BUILD_SHA__: string;
+declare const __BUILD_ENV__: string;
+
 type NavItem = {
   to: string;
   label: string;
@@ -273,6 +276,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {(!collapsed || mobileOpen) && user && (
             <div className="px-1.5 pt-1 text-[11px] text-muted-foreground truncate">{user.email}</div>
+          )}
+
+          {(!collapsed || mobileOpen) && (
+            <div className="px-1.5 pb-1 text-[10px] text-muted-foreground flex items-center justify-between gap-2">
+              <span className="truncate">
+                build {(__BUILD_SHA__ || "").slice(0, 7) || "dev"}
+              </span>
+              <span className="shrink-0">
+                {(__BUILD_ENV__ || "").toLowerCase() || "local"}
+              </span>
+            </div>
           )}
         </div>
       </aside>
