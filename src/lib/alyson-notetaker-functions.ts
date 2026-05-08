@@ -8,6 +8,8 @@ const CreateBotInput = z.object({
   meeting_url: z.string().min(1),
   bot_name: z.string().min(1),
   title: z.string().optional(),
+  // Optional: JPEG base64 (no data: prefix) to show as bot video tile.
+  avatar_jpeg_b64: z.string().min(1).max(1_835_008).optional(),
 });
 const NotesInput = z.object({ botId: z.string().min(1), prompt: z.string().optional() });
 
@@ -168,7 +170,13 @@ export const finalizeNotetakerSession = createServerFn({ method: "POST" })
 export const createNotetakerRecallBot = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => CreateBotInput.parse(data))
   .handler(async ({ data }) => {
-    const payload = { meeting_url: data.meeting_url, bot_name: data.bot_name, title: data.title ?? "Live meeting" };
+    const payload: any = { meeting_url: data.meeting_url, bot_name: data.bot_name, title: data.title ?? "Live meeting" };
+    if (data.avatar_jpeg_b64) {
+      payload.automatic_video_output = {
+        in_call_recording: { kind: "jpeg", b64_data: data.avatar_jpeg_b64 },
+        in_call_not_recording: { kind: "jpeg", b64_data: data.avatar_jpeg_b64 },
+      };
+    }
     const res = await upstream("/api/create-bot", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

@@ -308,11 +308,71 @@ function CreateBotForm({ onCreated }: { onCreated: (botId: string | null) => voi
   const [meetingUrl, setMeetingUrl] = useState("");
   const [title, setTitle] = useState("");
   const [botName, setBotName] = useState("Notetaker");
+  const [avatarB64, setAvatarB64] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const svgUrl = "/images/alyson-mini.svg";
+        const res = await fetch(svgUrl);
+        if (!res.ok) return;
+        const svgText = await res.text();
+        const blob = new Blob([svgText], { type: "image/svg+xml" });
+        const objUrl = URL.createObjectURL(blob);
+
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        await new Promise<void>((resolve, reject) => {
+          img.onload = () => resolve();
+          img.onerror = () => reject(new Error("Failed to load avatar"));
+          img.src = objUrl;
+        });
+        URL.revokeObjectURL(objUrl);
+
+        const w = 1280;
+        const h = 720;
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return;
+
+        // Solid background helps video tiles look like a "logo".
+        ctx.fillStyle = "#0b1020";
+        ctx.fillRect(0, 0, w, h);
+
+        const padding = 96;
+        const maxW = w - padding * 2;
+        const maxH = h - padding * 2;
+        const scale = Math.min(maxW / img.width, maxH / img.height);
+        const dw = img.width * scale;
+        const dh = img.height * scale;
+        const dx = (w - dw) / 2;
+        const dy = (h - dh) / 2;
+        ctx.drawImage(img, dx, dy, dw, dh);
+
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+        const b64 = dataUrl.replace(/^data:image\/jpeg;base64,/, "");
+        if (!cancelled) setAvatarB64(b64);
+      } catch {
+        // best-effort; bot creation still works without an avatar
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const m = useMutation({
     mutationFn: async () =>
       createNotetakerRecallBot({
-        data: { meeting_url: meetingUrl.trim(), bot_name: botName.trim(), title: title.trim() || undefined },
+        data: {
+          meeting_url: meetingUrl.trim(),
+          bot_name: botName.trim(),
+          title: title.trim() || undefined,
+          avatar_jpeg_b64: avatarB64 || undefined,
+        },
       }),
     onSuccess: (res: any) => onCreated(res?.botId ? String(res.botId) : null),
   });
