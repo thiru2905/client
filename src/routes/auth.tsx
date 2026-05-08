@@ -63,9 +63,9 @@ function AuthPage() {
 
           <div className="mt-7">
             {mode === "login" ? (
-              <SignIn routing="virtual" afterSignInUrl="/" />
+              <SignIn routing="virtual" afterSignInUrl="/app" />
             ) : (
-              <SignUp routing="virtual" afterSignUpUrl="/" />
+              <SignUp routing="virtual" afterSignUpUrl="/app" />
             )}
           </div>
 

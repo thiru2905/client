@@ -22,6 +22,7 @@ import { Route as DocumentsRouteImport } from './routes/documents'
 import { Route as BoardingRouteImport } from './routes/boarding'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AttendanceRouteImport } from './routes/attendance'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as BonusRouteRouteImport } from './routes/bonus/route'
 import { Route as AlysonNotetakerRouteRouteImport } from './routes/alyson-notetaker/route'
@@ -100,6 +101,11 @@ const AttendanceRoute = AttendanceRouteImport.update({
   path: '/attendance',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
@@ -166,6 +172,7 @@ export interface FileRoutesByFullPath {
   '/alyson-notetaker': typeof AlysonNotetakerRouteRouteWithChildren
   '/bonus': typeof BonusRouteRouteWithChildren
   '/admin': typeof AdminRoute
+  '/app': typeof AppRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
   '/boarding': typeof BoardingRoute
@@ -191,6 +198,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
+  '/app': typeof AppRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
   '/boarding': typeof BoardingRoute
@@ -219,6 +227,7 @@ export interface FileRoutesById {
   '/alyson-notetaker': typeof AlysonNotetakerRouteRouteWithChildren
   '/bonus': typeof BonusRouteRouteWithChildren
   '/admin': typeof AdminRoute
+  '/app': typeof AppRoute
   '/attendance': typeof AttendanceRoute
   '/auth': typeof AuthRoute
   '/boarding': typeof BoardingRoute
@@ -248,6 +257,7 @@ export interface FileRouteTypes {
     | '/alyson-notetaker'
     | '/bonus'
     | '/admin'
+    | '/app'
     | '/attendance'
     | '/auth'
     | '/boarding'
@@ -273,6 +283,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/admin'
+    | '/app'
     | '/attendance'
     | '/auth'
     | '/boarding'
@@ -300,6 +311,7 @@ export interface FileRouteTypes {
     | '/alyson-notetaker'
     | '/bonus'
     | '/admin'
+    | '/app'
     | '/attendance'
     | '/auth'
     | '/boarding'
@@ -328,6 +340,7 @@ export interface RootRouteChildren {
   AlysonNotetakerRouteRoute: typeof AlysonNotetakerRouteRouteWithChildren
   BonusRouteRoute: typeof BonusRouteRouteWithChildren
   AdminRoute: typeof AdminRoute
+  AppRoute: typeof AppRoute
   AttendanceRoute: typeof AttendanceRoute
   AuthRoute: typeof AuthRoute
   BoardingRoute: typeof BoardingRoute
@@ -434,6 +447,13 @@ declare module '@tanstack/react-router' {
       path: '/attendance'
       fullPath: '/attendance'
       preLoaderRoute: typeof AttendanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin': {
@@ -573,6 +593,7 @@ const rootRouteChildren: RootRouteChildren = {
   AlysonNotetakerRouteRoute: AlysonNotetakerRouteRouteWithChildren,
   BonusRouteRoute: BonusRouteRouteWithChildren,
   AdminRoute: AdminRoute,
+  AppRoute: AppRoute,
   AttendanceRoute: AttendanceRoute,
   AuthRoute: AuthRoute,
   BoardingRoute: BoardingRoute,

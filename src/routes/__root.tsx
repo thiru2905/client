@@ -95,15 +95,17 @@ function AuthGate() {
   const navigate = useNavigate();
   const path = router.location.pathname;
   const isAuthRoute = path === "/auth";
+  const isLandingRoute = path === "/";
+  const isPublicRoute = isAuthRoute || isLandingRoute;
 
   useEffect(() => {
     if (loading) return;
-    if (!session && !isAuthRoute) {
+    if (!session && !isPublicRoute) {
       navigate({ to: "/auth", replace: true });
-    } else if (session && isAuthRoute) {
-      navigate({ to: "/", replace: true });
+    } else if (session && (isAuthRoute || isLandingRoute)) {
+      navigate({ to: "/app", replace: true });
     }
-  }, [session, loading, isAuthRoute, navigate]);
+  }, [session, loading, isPublicRoute, isAuthRoute, isLandingRoute, navigate]);
 
   if (loading) {
     return (
@@ -113,7 +115,7 @@ function AuthGate() {
     );
   }
 
-  if (isAuthRoute) return <Outlet />;
+  if (isPublicRoute) return <Outlet />;
   if (!session) return null;
 
   return (

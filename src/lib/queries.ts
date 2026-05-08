@@ -12,6 +12,10 @@ export type Employee = {
   department_id: string;
   hire_date: string;
   performance_score: number;
+  /** Optional org hierarchy support (used by `OrgChart`) */
+  manager_id?: string | null;
+  /** Optional raw manager name (S3 demo datasets) */
+  manager_name?: string | null;
 };
 export type Compensation = {
   id: string;
@@ -54,6 +58,53 @@ export type EmployeeFull = Employee & {
   total_comp: number;
   effective_bonus: number;
 };
+
+function normalizeName(s: unknown) {
+  return String(s ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function pickManagerName(raw: unknown): string | null {
+  const s = String(raw ?? "").trim();
+  if (!s) return null;
+  // Handle cases like "Bill & Omer/Kumail" → "Bill"
+  const first = s.split("&")[0]!.split("/")[0]!.split(",")[0]!.trim();
+  return first || null;
+}
+
+function withManagerIds(employees: Employee[]) {
+  const byName = new Map<string, string>();
+  for (const e of employees) {
+    const n = normalizeName(e.full_name);
+    if (n) byName.set(n, e.id);
+  }
+
+  return employees.map((e) => {
+    const anyE = e as any;
+    const managerNameRaw = anyE.manager_name ?? anyE.manager ?? anyE.Manager ?? anyE.reports_to ?? anyE.reportsTo;
+    const managerName = pickManagerName(managerNameRaw);
+    const self = normalizeName(e.full_name);
+    const managerNorm = normalizeName(managerName);
+
+    // self-managed or missing manager => root
+    if (!managerName || (managerNorm && managerNorm === self)) {
+      return { ...e, manager_id: anyE.manager_id ?? null, manager_name: managerName ?? null };
+    }
+
+    let managerId = byName.get(managerNorm) ?? null;
+    // Fuzzy fallback: "Omer" should match "Muhammad Omer Affan", etc.
+    if (!managerId && managerNorm) {
+      const matches = employees
+        .filter((x) => normalizeName(x.full_name).includes(managerNorm))
+        .map((x) => x.id);
+      if (matches.length === 1) managerId = matches[0] ?? null;
+    }
+    // If a manager name exists but we can't resolve it, keep as root (still renders)
+    return { ...e, manager_id: anyE.manager_id ?? managerId, manager_name: managerName };
+  });
+}
 
 function toOverviewFull(parts: {
   departments: Department[];
@@ -102,7 +153,7 @@ export async function fetchOverview() {
     const snap = await getHrOverviewFromS3();
     return toOverviewFull({
       departments: snap.departments,
-      employees: snap.employees,
+      employees: withManagerIds(snap.employees as Employee[]),
       compensation: snap.compensation,
       history: snap.history,
     });
@@ -119,6 +170,24 @@ export async function fetchOverview() {
   try {
     // Primary source: Supabase (normal mode)
     const parts = await fetchOverviewPartsFromSupabase();
+    // If Supabase returns "empty but not error", prefer S3 snapshot so Team doesn't look blank.
+    // This is common in demo/staging deployments where Supabase tables exist but aren't seeded.
+    if ((parts.employees?.length ?? 0) === 0) {
+      try {
+        const snap = await getHrOverviewFromS3();
+        if ((snap.employees?.length ?? 0) > 0) {
+          return toOverviewFull({
+            departments: snap.departments,
+            employees: snap.employees,
+            compensation: snap.compensation,
+            history: snap.history,
+          });
+        }
+      } catch {
+        // Ignore S3 errors here and keep the Supabase result.
+      }
+    }
+
     return toOverviewFull(parts);
   } catch (err) {
     if (!s3Fallback) throw err;

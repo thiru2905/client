@@ -184,7 +184,7 @@ function TeamPage() {
           </>
         )}
 
-        {view === "chart" && <OrgChart employees={data.employees} />}
+        {view === "chart" && <OrgChart employees={data.employees} canEdit={auth.hasRole("super_admin")} />}
       </div>
 
       <EmployeeDrawer employee={picked} onClose={() => setPicked(null)} />

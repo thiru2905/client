@@ -394,3 +394,16 @@ button:disabled,
   border-bottom: 1px solid var(--border);
   color: var(--ink);
 }
+
+/* Landing: Aceternity-style background beams */
+@keyframes alyson-beam {
+  0% {
+    transform: translate3d(0, -30%, 0);
+  }
+  100% {
+    transform: translate3d(0, 70%, 0);
+  }
+}
+.alyson-beam {
+  animation: alyson-beam 5.5s linear infinite;
+}

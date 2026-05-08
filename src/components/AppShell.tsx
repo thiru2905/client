@@ -26,7 +26,7 @@ type NavItem = {
 const NEW_BADGE_ROUTES = new Set<string>(["/bonus", "/time-dashboard", "/alyson-notetaker", "/boarding"]);
 
 const NAV: NavItem[] = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true, group: "Workspace" },
+  { to: "/app", label: "Dashboard", icon: LayoutDashboard, end: true, group: "Workspace" },
   { to: "/team", label: "Team", icon: Users, group: "People", roles: ["super_admin", "ceo", "hr", "manager"] },
   { to: "/boarding", label: "Boarding", icon: UserPlus, group: "People", roles: ["super_admin", "ceo", "hr"] },
   { to: "/time-dashboard", label: "Time Dashboard", icon: Clock, group: "People", roles: ["super_admin"] },
@@ -156,16 +156,26 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         ].join(" ")}
       >
         <div className="px-3 pt-4 pb-3 border-b border-sidebar-border flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-foreground text-background grid place-items-center shrink-0">
-            <Sparkles className="h-4 w-4" />
-          </div>
-          {(!collapsed || mobileOpen) && (
-            <div className="leading-tight min-w-0 flex-1">
-              <div className="font-display text-[16px] font-semibold tracking-tight truncate">Alyson HR</div>
-              <div className="text-[10.5px] text-muted-foreground -mt-0.5">Acme, Inc.</div>
+          <Link
+            to="/"
+            className="flex items-center gap-2.5 min-w-0 flex-1 rounded-md hover:bg-sidebar-accent/60 transition-colors px-1 py-1 -mx-1"
+            aria-label="Go to landing page"
+          >
+            <div className="h-8 w-8 rounded-lg bg-foreground text-background grid place-items-center shrink-0">
+              <Sparkles className="h-4 w-4" />
             </div>
-          )}
-          <button onClick={() => setMobileOpen(false)} className="md:hidden h-7 w-7 grid place-items-center rounded-md hover:bg-sidebar-accent text-muted-foreground" aria-label="Close menu">
+            {(!collapsed || mobileOpen) && (
+              <div className="leading-tight min-w-0">
+                <div className="font-display text-[16px] font-semibold tracking-tight truncate">Alyson HR</div>
+                <div className="text-[10.5px] text-muted-foreground -mt-0.5">Acme, Inc.</div>
+              </div>
+            )}
+          </Link>
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="md:hidden h-7 w-7 grid place-items-center rounded-md hover:bg-sidebar-accent text-muted-foreground"
+            aria-label="Close menu"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>

@@ -71,7 +71,7 @@ function bucketName() {
 }
 
 function overviewKey() {
-  return "alyson-hr/overview.json";
+  return process.env.ALYSON_HR_S3_KEY || "alyson-hr/overview.json";
 }
 
 export async function putHrOverviewSnapshotToS3(snapshot: HrOverviewSnapshot) {
